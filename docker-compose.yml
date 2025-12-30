@@ -12,7 +12,7 @@ services:
     build:
       context: ./packages/server
       dockerfile: Dockerfile
-    image: pen-bridge:v1.2
+    image: pen-bridge:v1.3
     container_name: pen-bridge
     ports:
       - "3000:3000"
