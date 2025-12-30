@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
 
-  // 认证相关
+  // 腾讯云社区认证相关
   auth: {
     // 获取登录状态
     getStatus: () => ipcRenderer.invoke("auth:status"),
@@ -33,6 +33,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
     // 同步到服务器
     syncToServer: () => ipcRenderer.invoke("auth:syncToServer"),
+  },
+
+  // 掘金认证相关
+  juejinAuth: {
+    // 获取登录状态
+    getStatus: () => ipcRenderer.invoke("juejinAuth:status"),
+
+    // 打开登录窗口
+    login: () => ipcRenderer.invoke("juejinAuth:login"),
+
+    // 登出
+    logout: () => ipcRenderer.invoke("juejinAuth:logout"),
+
+    // 获取 cookies
+    getCookies: () => ipcRenderer.invoke("juejinAuth:getCookies"),
+
+    // 同步到服务器
+    syncToServer: () => ipcRenderer.invoke("juejinAuth:syncToServer"),
   },
 
   // 服务器配置相关
@@ -80,6 +98,20 @@ declare global {
           success: boolean;
           message: string;
           user?: { nickname?: string; avatarUrl?: string };
+        }>;
+        logout: () => Promise<{ success: boolean }>;
+        getCookies: () => Promise<string | null>;
+        syncToServer: () => Promise<{ success: boolean; message?: string }>;
+      };
+      juejinAuth: {
+        getStatus: () => Promise<{
+          isLoggedIn: boolean;
+          user?: { nickname?: string; avatarUrl?: string; userId?: string };
+        }>;
+        login: () => Promise<{
+          success: boolean;
+          message: string;
+          user?: { nickname?: string; avatarUrl?: string; userId?: string };
         }>;
         logout: () => Promise<{ success: boolean }>;
         getCookies: () => Promise<string | null>;

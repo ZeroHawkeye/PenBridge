@@ -1,6 +1,10 @@
 /**
  * 定时任务调度服务
  * 负责检查和执行定时发布任务
+ * 
+ * 功能：
+ * 1. 定时任务调度：检查并执行到期的发布任务
+ * 2. 每日登录状态探测：凌晨 00:00 检测各平台登录状态
  */
 
 import { LessThanOrEqual, In } from "typeorm";
@@ -10,6 +14,7 @@ import { ScheduledTask, TaskStatus, Platform, TencentPublishConfig } from "../en
 import { User } from "../entities/User";
 import { articleSyncService } from "./articleSync";
 import { emailService } from "./emailService";
+import { createTencentApiClient } from "./tencentApi";
 
 /**
  * 调度器配置
@@ -18,12 +23,14 @@ interface SchedulerConfig {
   checkInterval: number;  // 检查间隔（毫秒）
   maxRetries: number;     // 最大重试次数
   retryDelay: number;     // 重试延迟（毫秒）
+  loginCheckHour: number; // 每日登录状态检测的小时（0-23）
 }
 
 const DEFAULT_CONFIG: SchedulerConfig = {
   checkInterval: 60 * 1000,  // 每分钟检查一次
   maxRetries: 3,
   retryDelay: 5 * 60 * 1000,  // 5分钟后重试
+  loginCheckHour: 0,  // 凌晨 00:00 检测登录状态
 };
 
 /**
@@ -31,8 +38,10 @@ const DEFAULT_CONFIG: SchedulerConfig = {
  */
 export class SchedulerService {
   private intervalId?: ReturnType<typeof setInterval>;
+  private loginCheckIntervalId?: ReturnType<typeof setInterval>;
   private config: SchedulerConfig;
   private isRunning = false;
+  private lastLoginCheckDate?: string; // 记录上次登录检测的日期，避免重复检测
 
   constructor(config: Partial<SchedulerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -49,14 +58,20 @@ export class SchedulerService {
 
     console.log("[Scheduler] 启动定时任务调度器");
     console.log(`[Scheduler] 检查间隔: ${this.config.checkInterval / 1000}秒`);
+    console.log(`[Scheduler] 每日登录状态检测时间: ${this.config.loginCheckHour}:00`);
 
     // 启动时立即检查一次
     this.checkAndExecuteTasks();
 
-    // 设置定时检查
+    // 设置定时检查任务
     this.intervalId = setInterval(() => {
       this.checkAndExecuteTasks();
     }, this.config.checkInterval);
+
+    // 设置每日登录状态检测（每分钟检查是否到达指定时间）
+    this.loginCheckIntervalId = setInterval(() => {
+      this.checkDailyLoginStatus();
+    }, 60 * 1000); // 每分钟检查一次是否需要执行登录状态检测
   }
 
   /**
@@ -66,7 +81,144 @@ export class SchedulerService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = undefined;
-      console.log("[Scheduler] 调度器已停止");
+    }
+    if (this.loginCheckIntervalId) {
+      clearInterval(this.loginCheckIntervalId);
+      this.loginCheckIntervalId = undefined;
+    }
+    console.log("[Scheduler] 调度器已停止");
+  }
+
+  /**
+   * 检查是否需要执行每日登录状态检测
+   * 在凌晨指定时间（默认 00:00）执行一次
+   */
+  private async checkDailyLoginStatus(): Promise<void> {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const todayDate = now.toISOString().split("T")[0]; // YYYY-MM-DD 格式
+
+    // 检查是否是指定的检测时间（允许 1 分钟的误差）
+    if (currentHour === this.config.loginCheckHour && currentMinute === 0) {
+      // 检查今天是否已经执行过
+      if (this.lastLoginCheckDate === todayDate) {
+        return;
+      }
+
+      console.log(`[Scheduler] 开始每日登录状态检测... 时间: ${now.toLocaleString("zh-CN")}`);
+      this.lastLoginCheckDate = todayDate;
+
+      try {
+        await this.verifyAllUsersLoginStatus();
+      } catch (error) {
+        console.error("[Scheduler] 每日登录状态检测失败:", error);
+      }
+    }
+  }
+
+  /**
+   * 验证所有用户的登录状态
+   * 通过调用 API 获取用户信息来验证 cookie 是否有效
+   */
+  async verifyAllUsersLoginStatus(): Promise<void> {
+    // 检查数据库是否已初始化
+    if (!AppDataSource.isInitialized) {
+      console.log("[Scheduler] 数据库尚未初始化，跳过登录状态检测");
+      return;
+    }
+
+    const userRepo = AppDataSource.getRepository(User);
+
+    // 获取所有标记为已登录且有 cookies 的用户
+    const loggedInUsers = await userRepo.find({
+      where: {
+        isLoggedIn: true,
+      },
+    });
+
+    if (loggedInUsers.length === 0) {
+      console.log("[Scheduler] 没有已登录的用户，跳过检测");
+      return;
+    }
+
+    console.log(`[Scheduler] 检测 ${loggedInUsers.length} 个用户的登录状态`);
+
+    for (const user of loggedInUsers) {
+      if (!user.cookies) {
+        console.log(`[Scheduler] 用户 #${user.id} 没有 cookie 信息，标记为未登录`);
+        await this.handleLoginExpired(user, "没有 cookie 信息");
+        continue;
+      }
+
+      try {
+        const isValid = await this.verifyTencentLoginByApi(user.cookies);
+        
+        if (!isValid) {
+          console.log(`[Scheduler] 用户 #${user.id} 的腾讯云社区登录已失效`);
+          await this.handleLoginExpired(user, "Cookie 已过期，API 验证失败");
+        } else {
+          console.log(`[Scheduler] 用户 #${user.id} 的腾讯云社区登录状态有效`);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "未知错误";
+        console.error(`[Scheduler] 验证用户 #${user.id} 登录状态时出错:`, errorMsg);
+        
+        // 如果是明确的登录失效错误，则处理失效
+        if (this.isCookieExpiredError(errorMsg)) {
+          await this.handleLoginExpired(user, errorMsg);
+        }
+      }
+    }
+  }
+
+  /**
+   * 通过 API 验证腾讯云社区登录状态
+   * 使用获取用户昵称和头像的接口进行验证
+   */
+  private async verifyTencentLoginByApi(cookiesJson: string): Promise<boolean> {
+    try {
+      const apiClient = createTencentApiClient(cookiesJson);
+      
+      // 使用 getUserSession 接口验证登录状态
+      // 这个接口会尝试获取用户昵称和头像
+      const session = await apiClient.getUserSession();
+      
+      return session.isLogined;
+    } catch (error) {
+      console.error("[Scheduler] API 验证登录状态失败:", error);
+      return false;
+    }
+  }
+
+  /**
+   * 处理登录失效
+   * 1. 清理数据库中的 cookie 信息
+   * 2. 发送邮件通知（如果配置启用）
+   */
+  private async handleLoginExpired(user: User, reason: string): Promise<void> {
+    const userRepo = AppDataSource.getRepository(User);
+    
+    // 记录用户原有信息用于通知
+    const nickname = user.nickname || "用户";
+    
+    // 1. 清理 cookie 信息并标记为未登录
+    user.isLoggedIn = false;
+    user.cookies = undefined;
+    await userRepo.save(user);
+    
+    console.log(`[Scheduler] 已清理用户 #${user.id} (${nickname}) 的 cookie 信息`);
+
+    // 2. 发送邮件通知（如果配置启用）
+    try {
+      await emailService.sendEmail(user.id, "cookie_expired", {
+        platform: "tencent",
+        errorMessage: reason,
+      });
+      console.log(`[Scheduler] 已发送登录失效通知邮件给用户 #${user.id}`);
+    } catch (emailError) {
+      // 邮件发送失败不影响主流程
+      console.error(`[Scheduler] 发送登录失效通知邮件失败:`, emailError);
     }
   }
 

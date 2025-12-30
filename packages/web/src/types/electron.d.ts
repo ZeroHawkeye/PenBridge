@@ -23,6 +23,21 @@ export interface ElectronAuthAPI {
   syncToServer: () => Promise<{ success: boolean; message?: string }>;
 }
 
+export interface ElectronJuejinAuthAPI {
+  getStatus: () => Promise<{
+    isLoggedIn: boolean;
+    user?: { nickname?: string; avatarUrl?: string; userId?: string };
+  }>;
+  login: () => Promise<{
+    success: boolean;
+    message?: string;
+    user?: { nickname?: string; avatarUrl?: string; userId?: string };
+  }>;
+  logout: () => Promise<{ success: boolean }>;
+  getCookies: () => Promise<string | null>;
+  syncToServer: () => Promise<{ success: boolean; message?: string }>;
+}
+
 export interface ServerConfig {
   baseUrl: string;
   isConfigured: boolean;
@@ -42,6 +57,7 @@ export interface ElectronShellAPI {
 export interface ElectronAPI {
   window: ElectronWindowAPI;
   auth: ElectronAuthAPI;
+  juejinAuth: ElectronJuejinAuthAPI;
   serverConfig: ElectronServerConfigAPI;
   shell: ElectronShellAPI;
   platform: string;

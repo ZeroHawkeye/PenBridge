@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Cloud,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { notification } from "antd";
 import { cn } from "@/lib/utils";
@@ -36,10 +37,18 @@ import {
 import { trpc } from "@/utils/trpc";
 import PublishMenu from "@/components/PublishMenu";
 
+// 同步结果类型
+interface SyncResult {
+  platform: string;
+  success: boolean;
+  message: string;
+}
+
 function ArticlesPage() {
   const navigate = useNavigate();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [articleToDelete, setArticleToDelete] = useState<number | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const trpcUtils = trpc.useContext();
 
@@ -61,36 +70,105 @@ function ArticlesPage() {
     },
   });
 
-  // 同步文章状态
-  const syncStatusMutation = trpc.sync.syncArticleStatus.useMutation({
-    onSuccess: (result: any) => {
-      refetch();
-      notification.open({
-        message: result.success ? "腾讯云社区同步成功" : "腾讯云社区同步失败",
-        description: result.message,
-        placement: "bottomRight",
-        duration: 5,
-        type: result.success ? "success" : "error",
+  // 同步腾讯云文章状态（不自动显示通知）
+  const syncTencentMutation = trpc.sync.syncArticleStatus.useMutation();
+
+  // 同步掘金文章状态（不自动显示通知）
+  const syncJuejinMutation = trpc.juejin.syncArticleStatus.useMutation();
+
+  // 同步所有平台状态，合并结果在一个通知中展示
+  const handleSyncAll = async () => {
+    setIsSyncing(true);
+    const results: SyncResult[] = [];
+
+    // 并行调用两个平台的同步
+    const [tencentResult, juejinResult] = await Promise.allSettled([
+      syncTencentMutation.mutateAsync(),
+      syncJuejinMutation.mutateAsync(),
+    ]);
+
+    // 处理腾讯云同步结果
+    if (tencentResult.status === "fulfilled") {
+      const result = tencentResult.value as any;
+      results.push({
+        platform: "腾讯云社区",
+        success: result.success,
+        message: result.message,
       });
-    },
-    onError: (error: any) => {
-      notification.open({
-        message: "腾讯云社区同步失败",
-        description: error.message || "同步时发生错误",
-        placement: "bottomRight",
-        duration: 5,
-        type: "error",
+    } else {
+      results.push({
+        platform: "腾讯云社区",
+        success: false,
+        message: (tencentResult.reason as any)?.message || "同步时发生错误",
       });
-    },
-  });
+    }
+
+    // 处理掘金同步结果
+    if (juejinResult.status === "fulfilled") {
+      const result = juejinResult.value as any;
+      results.push({
+        platform: "掘金",
+        success: result.success,
+        message: result.message,
+      });
+    } else {
+      const errorMessage = (juejinResult.reason as any)?.message || "同步时发生错误";
+      // 未登录掘金时不显示错误
+      if (!errorMessage.includes("登录")) {
+        results.push({
+          platform: "掘金",
+          success: false,
+          message: errorMessage,
+        });
+      }
+    }
+
+    setIsSyncing(false);
+    refetch();
+
+    // 合并结果在一个通知中展示
+    if (results.length > 0) {
+      const allSuccess = results.every((r) => r.success);
+      const allFailed = results.every((r) => !r.success);
+
+      notification.open({
+        message: allSuccess ? "同步成功" : allFailed ? "同步失败" : "同步完成",
+        description: (
+          <div className="space-y-2 mt-1">
+            {results.map((result, index) => (
+              <div key={index} className="flex items-start gap-2">
+                <span
+                  className={cn(
+                    "shrink-0 text-xs font-medium px-1.5 py-0.5 rounded",
+                    result.success
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  )}
+                >
+                  {result.platform}
+                </span>
+                <span className="text-sm text-gray-600">{result.message}</span>
+              </div>
+            ))}
+          </div>
+        ),
+        placement: "bottomRight",
+        duration: 4,
+        type: allSuccess ? "success" : allFailed ? "error" : "info",
+      });
+    }
+  };
 
   // 页面加载时自动同步状态
   useEffect(() => {
-    const needsSync = data?.articles?.some(
+    const needsTencentSync = data?.articles?.some(
       (a: any) => a.status === "pending" || a.tencentArticleId
     );
-    if (needsSync && !syncStatusMutation.isLoading) {
-      syncStatusMutation.mutate();
+    const needsJuejinSync = data?.articles?.some(
+      (a: any) => a.juejinStatus === "pending" || a.juejinArticleId
+    );
+    if ((needsTencentSync || needsJuejinSync) && !isSyncing) {
+      handleSyncAll();
     }
   }, [data?.articles?.length]);
 
@@ -122,13 +200,13 @@ function ArticlesPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => syncStatusMutation.mutate()}
-            disabled={syncStatusMutation.isLoading}
+            onClick={handleSyncAll}
+            disabled={isSyncing}
           >
             <RefreshCw
               className={cn(
                 "h-4 w-4 mr-2",
-                syncStatusMutation.isLoading && "animate-spin"
+                isSyncing && "animate-spin"
               )}
             />
             同步状态
@@ -154,7 +232,7 @@ function ArticlesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>标题</TableHead>
-              <TableHead className="w-32">平台</TableHead>
+              <TableHead className="min-w-[120px] w-auto">平台</TableHead>
               <TableHead className="w-40">定时发布</TableHead>
               <TableHead className="w-40">创建时间</TableHead>
               <TableHead className="w-40">操作</TableHead>
@@ -185,14 +263,14 @@ function ArticlesPage() {
                     </TableCell>
                     {/* 平台列 - 显示所有平台，通过颜色区分发布状态 */}
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-nowrap gap-1 whitespace-nowrap">
+                        {/* 腾讯云平台徽章 */}
                         {(() => {
                           const hasTencentId = article.tencentArticleId || article.tencentDraftId;
                           const isPublished = article.status === "published" && hasTencentId;
                           const isPending = article.status === "pending" && hasTencentId;
                           const isFailed = article.status === "failed" && hasTencentId;
 
-                          // 根据状态确定样式和提示
                           let badgeClass = "";
                           let tooltipText = "";
 
@@ -225,7 +303,49 @@ function ArticlesPage() {
                             </Tooltip>
                           );
                         })()}
-                        {/* 后续可添加更多平台的标签 */}
+                        {/* 掘金平台徽章 */}
+                        {(() => {
+                          const hasJuejinId = article.juejinArticleId || article.juejinDraftId;
+                          const juejinStatus = article.juejinStatus;
+
+                          let badgeClass = "";
+                          let tooltipText = "";
+
+                          if (juejinStatus === "published" && hasJuejinId) {
+                            badgeClass = "bg-green-100 text-green-700 border border-green-300";
+                            tooltipText = "已发布";
+                          } else if (juejinStatus === "pending" && hasJuejinId) {
+                            badgeClass = "bg-yellow-100 text-yellow-700 border border-yellow-300";
+                            tooltipText = "审核中";
+                          } else if (juejinStatus === "rejected" && hasJuejinId) {
+                            badgeClass = "bg-red-100 text-red-600 border border-red-300";
+                            tooltipText = "未通过审核";
+                          } else if (juejinStatus === "failed") {
+                            badgeClass = "bg-red-100 text-red-600 border border-red-300";
+                            tooltipText = "发布失败";
+                          } else if (juejinStatus === "draft" && hasJuejinId) {
+                            badgeClass = "bg-blue-100 text-blue-700 border border-blue-300";
+                            tooltipText = "草稿";
+                          } else {
+                            badgeClass = "bg-gray-100 text-gray-400";
+                            tooltipText = "未发布";
+                          }
+
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge
+                                  variant="secondary"
+                                  className={cn("text-xs gap-1", badgeClass)}
+                                >
+                                  <Sparkles className="h-3 w-3" />
+                                  掘金
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>{tooltipText}</TooltipContent>
+                            </Tooltip>
+                          );
+                        })()}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -318,6 +438,8 @@ function ArticlesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+
     </div>
   );
 }

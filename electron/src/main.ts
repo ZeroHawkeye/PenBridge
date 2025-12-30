@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, session, Menu, globalShortcut, shell } from "electron";
 import * as path from "path";
 import { TencentAuth } from "./auth/tencentAuth";
+import { JuejinAuth } from "./auth/juejinAuth";
 import { createStore } from "./store";
 
 // 存储实例
@@ -11,6 +12,9 @@ let mainWindow: BrowserWindow | null = null;
 
 // 腾讯认证模块
 const tencentAuth = new TencentAuth(store);
+
+// 掘金认证模块
+const juejinAuth = new JuejinAuth(store);
 
 // 前端开发服务器地址（仅开发环境使用）
 const WEB_URL = process.env.WEB_URL || "http://localhost:5173";
@@ -211,8 +215,8 @@ function registerUtilityHandlers() {
   });
 }
 
-// 注册 IPC 处理器
-function registerIpcHandlers() {
+// 注册腾讯云社区 IPC 处理器
+function registerTencentAuthHandlers() {
   // 获取登录状态
   ipcMain.handle("auth:status", async () => {
     return tencentAuth.getLoginStatus();
@@ -270,6 +274,73 @@ function registerIpcHandlers() {
       };
     }
   });
+}
+
+// 注册掘金 IPC 处理器
+function registerJuejinAuthHandlers() {
+  // 获取登录状态
+  ipcMain.handle("juejinAuth:status", async () => {
+    return juejinAuth.getLoginStatus();
+  });
+
+  // 打开登录窗口
+  ipcMain.handle("juejinAuth:login", async () => {
+    return juejinAuth.openLoginWindow(mainWindow);
+  });
+
+  // 登出
+  ipcMain.handle("juejinAuth:logout", async () => {
+    return juejinAuth.logout();
+  });
+
+  // 获取 cookies（用于发送给后端）
+  ipcMain.handle("juejinAuth:getCookies", async () => {
+    return juejinAuth.getCookies();
+  });
+
+  // 同步 cookies 到后端
+  ipcMain.handle("juejinAuth:syncToServer", async () => {
+    const cookies = juejinAuth.getCookies();
+    if (!cookies) {
+      return { success: false, message: "未登录" };
+    }
+
+    const serverUrl = getServerUrl();
+    if (!serverUrl) {
+      return { success: false, message: "服务器地址未配置，请先在设置中配置服务器地址" };
+    }
+
+    try {
+      // 使用 tRPC 批处理格式
+      const response = await fetch(`${serverUrl}/trpc/juejinAuth.setCookies`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cookies: cookies,
+        }),
+      });
+      const result = await response.json();
+
+      // tRPC 响应格式处理
+      if (result.result?.data) {
+        return result.result.data;
+      }
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "同步失败",
+      };
+    }
+  });
+}
+
+// 注册 IPC 处理器
+function registerIpcHandlers() {
+  registerTencentAuthHandlers();
+  registerJuejinAuthHandlers();
 }
 
 // 应用就绪

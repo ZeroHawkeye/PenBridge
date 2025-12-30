@@ -67,6 +67,37 @@ export class Article {
   @Column({ nullable: true })
   errorMessage?: string;
 
+  // 掘金相关字段
+  @Column({ nullable: true })
+  juejinDraftId?: string; // 掘金草稿ID
+
+  @Column({ nullable: true })
+  juejinArticleId?: string; // 掘金文章ID
+
+  @Column({ nullable: true })
+  juejinArticleUrl?: string; // 掘金文章链接
+
+  @Column({ nullable: true })
+  juejinCategoryId?: string; // 掘金分类ID
+
+  @Column({ type: "simple-array", nullable: true })
+  juejinTagIds?: string[]; // 掘金标签ID列表
+
+  @Column({ type: "simple-array", nullable: true })
+  juejinTagNames?: string[]; // 掘金标签名称列表（用于显示）
+
+  @Column({ nullable: true })
+  juejinBriefContent?: string; // 掘金摘要（最多100字）
+
+  @Column({ default: 1 })
+  juejinIsOriginal!: number; // 掘金是否原创: 1-原创, 0-转载
+
+  @Column({ nullable: true })
+  juejinStatus?: string; // 掘金文章状态: draft, pending, published, rejected
+
+  @Column({ nullable: true })
+  juejinLastSyncedAt?: Date; // 最后同步到掘金的时间
+
   @ManyToOne(() => User)
   user!: User;
 

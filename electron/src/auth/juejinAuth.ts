@@ -8,23 +8,37 @@ import {
   setupActionPolling,
 } from "./authUI";
 
-// 腾讯云相关 URL
-const TENCENT_DEVELOPER_URL = "https://cloud.tencent.com/developer";
-const TENCENT_DOMAIN = ".cloud.tencent.com";
+// 掘金相关 URL
+const JUEJIN_URL = "https://juejin.cn";
+const JUEJIN_DOMAIN = ".juejin.cn";
 
-export interface UserInfo {
+// 掘金登录所需的核心 Cookie 字段
+const REQUIRED_COOKIES = ["sessionid", "sid_guard"];
+const IMPORTANT_COOKIES = [
+  "sessionid",
+  "sessionid_ss",
+  "sid_tt",
+  "uid_tt",
+  "uid_tt_ss",
+  "sid_guard",
+  "sid_ucp_v1",
+  "ssid_ucp_v1",
+];
+
+export interface JuejinUserInfo {
   nickname?: string;
   avatarUrl?: string;
+  userId?: string;
   isLoggedIn: boolean;
 }
 
-export interface LoginResult {
+export interface JuejinLoginResult {
   success: boolean;
   message: string;
-  user?: UserInfo;
+  user?: JuejinUserInfo;
 }
 
-export class TencentAuth {
+export class JuejinAuth {
   private store: any;
   private loginWindow: BrowserWindow | null = null;
   private isResolved: boolean = false; // 防止重复 resolve
@@ -37,9 +51,9 @@ export class TencentAuth {
   }
 
   // 获取登录状态
-  getLoginStatus(): { isLoggedIn: boolean; user?: UserInfo } {
-    const cookies = this.store.get("cookies") as Cookie[] | undefined;
-    const userInfo = this.store.get("userInfo") as UserInfo | undefined;
+  getLoginStatus(): { isLoggedIn: boolean; user?: JuejinUserInfo } {
+    const cookies = this.store.get("juejinCookies") as Cookie[] | undefined;
+    const userInfo = this.store.get("juejinUserInfo") as JuejinUserInfo | undefined;
 
     if (cookies && cookies.length > 0 && userInfo?.isLoggedIn) {
       return {
@@ -53,7 +67,7 @@ export class TencentAuth {
 
   // 获取存储的 cookies
   getCookies(): string | null {
-    const cookies = this.store.get("cookies") as Cookie[] | undefined;
+    const cookies = this.store.get("juejinCookies") as Cookie[] | undefined;
     if (cookies && cookies.length > 0) {
       return JSON.stringify(cookies);
     }
@@ -63,14 +77,14 @@ export class TencentAuth {
   // 打开登录窗口
   async openLoginWindow(
     parentWindow: BrowserWindow | null
-  ): Promise<LoginResult> {
+  ): Promise<JuejinLoginResult> {
     // 重置状态
     this.isResolved = false;
     this.loginDetected = false;
 
     return new Promise((resolve) => {
       // 包装 resolve，防止重复调用
-      const safeResolve = (result: LoginResult) => {
+      const safeResolve = (result: JuejinLoginResult) => {
         if (!this.isResolved) {
           this.isResolved = true;
           resolve(result);
@@ -85,7 +99,7 @@ export class TencentAuth {
       }
 
       // 创建独立的 session，避免影响主窗口
-      const loginSession = session.fromPartition("persist:tencent-login");
+      const loginSession = session.fromPartition("persist:juejin-login");
 
       // 创建登录窗口
       this.loginWindow = new BrowserWindow({
@@ -99,7 +113,7 @@ export class TencentAuth {
           contextIsolation: true,
           session: loginSession,
         },
-        title: "登录腾讯云",
+        title: "登录掘金",
       });
 
       // 监听用户点击"获取鉴权"按钮
@@ -108,13 +122,13 @@ export class TencentAuth {
 
         try {
           const cookies = await this.extractAllCookies(loginSession);
-          if (cookies.length > 0) {
+          if (cookies.length > 0 && this.hasRequiredCookies(cookies)) {
             console.log("用户手动获取鉴权，cookies 数量:", cookies.length);
 
             // 保存 cookies 和用户信息
-            const userInfo: UserInfo = { isLoggedIn: true };
-            this.store.set("cookies", cookies);
-            this.store.set("userInfo", userInfo);
+            const userInfo: JuejinUserInfo = { isLoggedIn: true };
+            this.store.set("juejinCookies", cookies);
+            this.store.set("juejinUserInfo", userInfo);
 
             // 关闭登录窗口
             if (this.loginWindow && !this.loginWindow.isDestroyed()) {
@@ -154,13 +168,13 @@ export class TencentAuth {
         }
       );
 
-      // 加载腾讯云开发者社区页面
-      this.loginWindow.loadURL(TENCENT_DEVELOPER_URL);
+      // 加载掘金首页
+      this.loginWindow.loadURL(JUEJIN_URL);
 
       // 页面加载完成后注入按钮
       this.loginWindow.webContents.on("did-finish-load", () => {
         console.log("页面加载完成，注入按钮");
-        injectAuthButton(this.loginWindow, PLATFORM_THEMES.tencent);
+        injectAuthButton(this.loginWindow, PLATFORM_THEMES.juejin);
       });
 
       // 定期检查登录状态（用于调试）
@@ -173,9 +187,9 @@ export class TencentAuth {
         if (this.loginWindow && !this.loginWindow.isDestroyed()) {
           const cookies = await this.extractAllCookies(loginSession);
           console.log("当前 cookies 数量:", cookies.length);
-          const hasUin = cookies.some((c) => c.name === "uin" || c.name === "login_uin");
-          const hasSkey = cookies.some((c) => c.name.includes("skey"));
-          console.log("hasUin:", hasUin, "hasSkey:", hasSkey);
+          const hasSession = cookies.some((c) => c.name === "sessionid");
+          const hasSidGuard = cookies.some((c) => c.name === "sid_guard");
+          console.log("hasSession:", hasSession, "hasSidGuard:", hasSidGuard);
         } else {
           clearInterval(checkInterval);
         }
@@ -196,6 +210,12 @@ export class TencentAuth {
     });
   }
 
+  // 检查是否有必需的 cookies
+  private hasRequiredCookies(cookies: Cookie[]): boolean {
+    const cookieNames = cookies.map((c) => c.name);
+    return REQUIRED_COOKIES.every((name) => cookieNames.includes(name));
+  }
+
   // 检查登录状态（只检测，不提取）
   private async checkLoginStatus(loginSession: Electron.Session): Promise<void> {
     if (this.loginDetected) return;
@@ -204,15 +224,12 @@ export class TencentAuth {
       const cookies = await this.extractAllCookies(loginSession);
 
       // 检查是否有登录相关的 cookie
-      const hasUin = cookies.some((c) => c.name === "uin" || c.name === "login_uin");
-      const hasSkey = cookies.some((c) => c.name.includes("skey"));
-
-      if (hasUin && hasSkey && cookies.length > 5) {
+      if (this.hasRequiredCookies(cookies) && cookies.length > 5) {
         console.log("检测到登录 cookies，数量:", cookies.length);
         this.loginDetected = true;
 
         // 注入提示和按钮，等待用户手动点击
-        injectAuthButton(this.loginWindow, PLATFORM_THEMES.tencent);
+        injectAuthButton(this.loginWindow, PLATFORM_THEMES.juejin);
       }
     } catch (error) {
       console.error("检查登录状态失败:", error);
@@ -221,14 +238,14 @@ export class TencentAuth {
 
   // 提取所有 cookies
   private async extractAllCookies(loginSession: Electron.Session): Promise<Cookie[]> {
-    // 获取腾讯云域名下的所有 cookies
+    // 获取掘金域名下的所有 cookies
     const cookies = await loginSession.cookies.get({
-      domain: TENCENT_DOMAIN,
+      domain: JUEJIN_DOMAIN,
     });
 
     // 也获取不带点前缀的域名 cookies
     const cookies2 = await loginSession.cookies.get({
-      domain: "cloud.tencent.com",
+      domain: "juejin.cn",
     });
 
     // 去重合并
@@ -243,11 +260,11 @@ export class TencentAuth {
   // 登出
   async logout(): Promise<{ success: boolean }> {
     // 清除存储的信息
-    this.store.delete("cookies");
-    this.store.delete("userInfo");
+    this.store.delete("juejinCookies");
+    this.store.delete("juejinUserInfo");
 
     // 清除 session 中的 cookies
-    const loginSession = session.fromPartition("persist:tencent-login");
+    const loginSession = session.fromPartition("persist:juejin-login");
     await loginSession.clearStorageData({
       storages: ["cookies"],
     });

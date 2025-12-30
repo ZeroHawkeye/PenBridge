@@ -28,6 +28,14 @@ function EditArticlePage() {
   const [scheduledAt, setScheduledAt] = useState<any>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  // 掘金相关状态
+  const [juejinCategoryId, setJuejinCategoryId] = useState<string>("");
+  const [juejinTagIds, setJuejinTagIds] = useState<string[]>([]);
+  const [juejinTagNames, setJuejinTagNames] = useState<string[]>([]);
+  const [juejinBriefContent, setJuejinBriefContent] = useState<string>("");
+  const [juejinIsOriginal, setJuejinIsOriginal] = useState<number>(1);
+  const [juejinStatus, setJuejinStatus] = useState<string>("");
+  const [juejinArticleUrl, setJuejinArticleUrl] = useState<string>("");
   const trpcUtils = trpc.useContext();
 
   // 用于跟踪是否为初始加载（避免初始加载时触发保存）
@@ -151,6 +159,14 @@ function EditArticlePage() {
       setTencentTagIds(articleMeta.tencentTagIds || []);
       setSourceType(articleMeta.sourceType || 1);
       setScheduledAt(articleMeta.scheduledAt ? dayjs(articleMeta.scheduledAt) : null);
+      // 掘金相关
+      setJuejinCategoryId((articleMeta as any).juejinCategoryId || "");
+      setJuejinTagIds((articleMeta as any).juejinTagIds || []);
+      setJuejinTagNames((articleMeta as any).juejinTagNames || []);
+      setJuejinBriefContent((articleMeta as any).juejinBriefContent || "");
+      setJuejinIsOriginal((articleMeta as any).juejinIsOriginal ?? 1);
+      setJuejinStatus((articleMeta as any).juejinStatus || "");
+      setJuejinArticleUrl((articleMeta as any).juejinArticleUrl || "");
 
       if (isNewArticle) {
         loadedArticleIdRef.current = articleMeta.id;
@@ -306,6 +322,14 @@ function EditArticlePage() {
             tencentTagIds={tencentTagIds}
             sourceType={sourceType}
             summary={summary}
+            // 掘金相关
+            juejinArticleUrl={juejinArticleUrl}
+            juejinCategoryId={juejinCategoryId}
+            juejinTagIds={juejinTagIds}
+            juejinTagNames={juejinTagNames}
+            juejinBriefContent={juejinBriefContent}
+            juejinIsOriginal={juejinIsOriginal}
+            juejinStatus={juejinStatus}
             variant="button"
           />
         </>

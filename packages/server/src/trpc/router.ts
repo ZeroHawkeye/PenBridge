@@ -8,6 +8,15 @@ import {
   logout,
   setCookiesFromClient,
 } from "../services/tencentAuth";
+import {
+  setJuejinCookiesFromClient,
+  juejinAutoLogin,
+  getJuejinLoginStatus,
+  juejinLogout,
+  getJuejinSessionInfo,
+  getJuejinCookies,
+} from "../services/juejinAuth";
+import { createJuejinApiClient } from "../services/juejinApi";
 import { articleSyncService } from "../services/articleSync";
 import { schedulerService } from "../services/scheduler";
 import { emailService } from "../services/emailService";
@@ -271,6 +280,49 @@ export const appRouter = t.router({
       }),
   }),
 
+  // 掘金认证相关
+  juejinAuth: t.router({
+    // 获取登录状态
+    status: protectedProcedure.query(async () => {
+      return getJuejinLoginStatus();
+    }),
+
+    // 自动登录（使用保存的 cookies）
+    autoLogin: protectedProcedure.mutation(async () => {
+      return juejinAutoLogin();
+    }),
+
+    // 登出
+    logout: protectedProcedure.mutation(async () => {
+      await juejinLogout();
+      return { success: true };
+    }),
+
+    // 从客户端设置 cookies（Electron 客户端调用）
+    setCookies: protectedProcedure
+      .input(
+        z.object({
+          cookies: z.string(),
+          nickname: z.string().optional(),
+          avatarUrl: z.string().optional(),
+          userId: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        return setJuejinCookiesFromClient(
+          input.cookies,
+          input.nickname,
+          input.avatarUrl,
+          input.userId
+        );
+      }),
+
+    // 获取会话信息（包括过期时间）
+    sessionInfo: protectedProcedure.query(async () => {
+      return getJuejinSessionInfo();
+    }),
+  }),
+
   // 文章相关
   article: t.router({
     // 获取文章列表
@@ -338,6 +390,17 @@ export const appRouter = t.router({
             "userId",
             "createdAt",
             "updatedAt",
+            // 掘金相关字段
+            "juejinDraftId",
+            "juejinArticleId",
+            "juejinArticleUrl",
+            "juejinCategoryId",
+            "juejinTagIds",
+            "juejinTagNames",
+            "juejinBriefContent",
+            "juejinIsOriginal",
+            "juejinStatus",
+            "juejinLastSyncedAt",
           ],
         });
       }),
@@ -1014,6 +1077,459 @@ export const appRouter = t.router({
     // 发送测试邮件
     sendTest: protectedProcedure.mutation(async () => {
       return emailService.sendTestEmail(1);
+    }),
+  }),
+
+  // 掘金相关
+  juejin: t.router({
+    // 搜索标签
+    searchTags: protectedProcedure
+      .input(z.object({ keyword: z.string() }))
+      .query(async ({ input }) => {
+        const cookies = await getJuejinCookies();
+        if (!cookies) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "请先登录掘金账号",
+          });
+        }
+
+        const client = createJuejinApiClient(cookies);
+        const tags = await client.searchTags(input.keyword);
+        return tags;
+      }),
+
+    // 获取分类列表
+    getCategories: protectedProcedure.query(async () => {
+      const cookies = await getJuejinCookies();
+      if (!cookies) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "请先登录掘金账号",
+        });
+      }
+
+      const client = createJuejinApiClient(cookies);
+      return client.fetchCategories();
+    }),
+
+    // 保存掘金发布配置
+    saveConfig: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          categoryId: z.string(),
+          tagIds: z.array(z.string()),
+          tagNames: z.array(z.string()),
+          briefContent: z.string(),
+          isOriginal: z.number().min(0).max(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const articleRepo = AppDataSource.getRepository(Article);
+        const article = await articleRepo.findOne({ where: { id: input.id } });
+
+        if (!article) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "文章不存在",
+          });
+        }
+
+        article.juejinCategoryId = input.categoryId;
+        article.juejinTagIds = input.tagIds;
+        article.juejinTagNames = input.tagNames;
+        article.juejinBriefContent = input.briefContent;
+        article.juejinIsOriginal = input.isOriginal;
+
+        await articleRepo.save(article);
+
+        return { success: true };
+      }),
+
+    // 发布文章到掘金
+    publish: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const cookies = await getJuejinCookies();
+        if (!cookies) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "请先登录掘金账号",
+          });
+        }
+
+        const articleRepo = AppDataSource.getRepository(Article);
+        const article = await articleRepo.findOne({ where: { id: input.id } });
+
+        if (!article) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "文章不存在",
+          });
+        }
+
+        // 验证必填字段
+        if (!article.juejinCategoryId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "请先选择文章分类",
+          });
+        }
+
+        if (!article.juejinTagIds || article.juejinTagIds.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "请至少选择一个标签",
+          });
+        }
+
+        if (article.juejinTagIds.length > 3) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "最多选择3个标签",
+          });
+        }
+
+        if (!article.juejinBriefContent) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "请填写文章摘要",
+          });
+        }
+
+        if (article.juejinBriefContent.length < 50) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "摘要至少需要50个字符",
+          });
+        }
+
+        if (article.juejinBriefContent.length > 100) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "摘要不能超过100个字符",
+          });
+        }
+
+        if (!article.content || article.content.length < 100) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "文章正文建议至少100字",
+          });
+        }
+
+        try {
+          const client = createJuejinApiClient(cookies);
+
+          console.log("[Juejin] 开始发布文章:", {
+            articleId: article.id,
+            title: article.title,
+            categoryId: article.juejinCategoryId,
+            tagIds: article.juejinTagIds,
+            existingDraftId: article.juejinDraftId || "无",
+          });
+
+          // 一键发布文章（复用已有草稿ID）
+          const result = await client.publishArticleOneClick({
+            title: article.title,
+            markContent: article.content,
+            briefContent: article.juejinBriefContent,
+            categoryId: article.juejinCategoryId,
+            tagIds: article.juejinTagIds,
+            isOriginal: article.juejinIsOriginal,
+            existingDraftId: article.juejinDraftId || undefined,
+          });
+
+          // 更新文章状态（发布后进入审核状态，审核通过后才是published）
+          article.juejinArticleId = result.article_id;
+          article.juejinDraftId = result.draft_id;
+          article.juejinArticleUrl = `https://juejin.cn/post/${result.article_id}`;
+          article.juejinStatus = "pending"; // 掘金发布后需要审核，初始状态为审核中
+          article.juejinLastSyncedAt = new Date();
+
+          await articleRepo.save(article);
+
+          console.log("[Juejin] 发布成功:", {
+            articleId: result.article_id,
+            draftId: result.draft_id,
+            url: article.juejinArticleUrl,
+          });
+
+          return {
+            success: true,
+            message: "发布成功",
+            articleId: result.article_id,
+            articleUrl: article.juejinArticleUrl,
+          };
+        } catch (error) {
+          // 详细记录错误日志
+          console.error("[Juejin] 发布失败，详细信息:", {
+            articleId: article.id,
+            title: article.title,
+            categoryId: article.juejinCategoryId,
+            tagIds: article.juejinTagIds,
+            briefContent: article.juejinBriefContent,
+            contentLength: article.content?.length,
+            error: error instanceof Error ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            } : error,
+          });
+          
+          // 更新错误状态
+          article.juejinStatus = "failed";
+          article.errorMessage = error instanceof Error ? error.message : "发布失败";
+          await articleRepo.save(article);
+
+          // 返回用户友好的错误消息
+          let userMessage = "发布失败";
+          if (error instanceof Error) {
+            const msg = error.message;
+            if (msg.includes("参数错误")) {
+              userMessage = "发布参数错误，请检查分类、标签和摘要设置";
+            } else if (msg.includes("登录") || msg.includes("UNAUTHORIZED")) {
+              userMessage = "掘金登录已过期，请重新登录";
+            } else if (msg.includes("频繁")) {
+              userMessage = "操作过于频繁，请稍后再试";
+            } else {
+              userMessage = msg;
+            }
+          }
+
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: userMessage,
+          });
+        }
+      }),
+
+    // 同步文章到掘金草稿
+    syncToDraft: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const cookies = await getJuejinCookies();
+        if (!cookies) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "请先登录掘金账号",
+          });
+        }
+
+        const articleRepo = AppDataSource.getRepository(Article);
+        const article = await articleRepo.findOne({ where: { id: input.id } });
+
+        if (!article) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "文章不存在",
+          });
+        }
+
+        try {
+          const client = createJuejinApiClient(cookies);
+
+          // 创建或更新草稿
+          let draftId = article.juejinDraftId;
+
+          if (!draftId) {
+            // 创建新草稿
+            const draft = await client.createDraft(article.title);
+            draftId = draft.id;
+          }
+
+          // 更新草稿内容
+          await client.updateDraft({
+            id: draftId,
+            title: article.title,
+            markContent: article.content,
+            briefContent: article.juejinBriefContent || "",
+            categoryId: article.juejinCategoryId || "0",
+            tagIds: article.juejinTagIds || [],
+            isOriginal: article.juejinIsOriginal,
+          });
+
+          // 更新文章状态
+          article.juejinDraftId = draftId;
+          article.juejinStatus = "draft";
+          article.juejinLastSyncedAt = new Date();
+
+          await articleRepo.save(article);
+
+          return {
+            success: true,
+            message: "草稿同步成功",
+            draftId,
+          };
+        } catch (error) {
+          console.error("[Juejin] 同步草稿失败:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "同步失败",
+          });
+        }
+      }),
+
+    // 获取掘金文章列表
+    fetchArticles: protectedProcedure
+      .input(
+        z.object({
+          auditStatus: z.number().nullable().optional(), // null-全部, 2-已发布, 1-审核中, 3-未通过
+          keyword: z.string().optional(),
+          pageNo: z.number().optional(),
+          pageSize: z.number().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const cookies = await getJuejinCookies();
+        if (!cookies) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "请先登录掘金账号",
+          });
+        }
+
+        try {
+          const client = createJuejinApiClient(cookies);
+          const articles = await client.fetchUserArticles({
+            auditStatus: input.auditStatus,
+            keyword: input.keyword,
+            pageNo: input.pageNo,
+            pageSize: input.pageSize,
+          });
+
+          // 转换为前端友好的格式
+          return articles.map((item) => ({
+            articleId: item.article_id,
+            title: item.article_info.title,
+            briefContent: item.article_info.brief_content,
+            coverImage: item.article_info.cover_image,
+            viewCount: item.article_info.view_count,
+            diggCount: item.article_info.digg_count,
+            commentCount: item.article_info.comment_count,
+            collectCount: item.article_info.collect_count,
+            status: item.article_info.status,
+            auditStatus: item.article_info.audit_status,
+            verifyStatus: item.article_info.verify_status,
+            draftId: item.article_info.draft_id,
+            ctime: item.article_info.ctime,
+            mtime: item.article_info.mtime,
+            rtime: item.article_info.rtime,
+            categoryId: item.category?.category_id,
+            categoryName: item.category?.category_name,
+            tags: item.tags?.map((t) => ({
+              tagId: t.tag_id,
+              tagName: t.tag_name,
+            })) || [],
+            url: `https://juejin.cn/post/${item.article_id}`,
+          }));
+        } catch (error) {
+          console.error("[Juejin] 获取文章列表失败:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "获取失败",
+          });
+        }
+      }),
+
+    // 同步本地文章与掘金文章状态
+    syncArticleStatus: protectedProcedure.mutation(async () => {
+      const cookies = await getJuejinCookies();
+      if (!cookies) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "请先登录掘金账号",
+        });
+      }
+
+      try {
+        const client = createJuejinApiClient(cookies);
+        const articleRepo = AppDataSource.getRepository(Article);
+
+        // 获取掘金上的所有文章（分页获取）
+        const allJuejinArticles: Array<{
+          article_id: string;
+          article_info: {
+            article_id: string;
+            title: string;
+            status: number;
+            audit_status: number;
+            draft_id: string;
+          };
+        }> = [];
+
+        let pageNo = 1;
+        const pageSize = 50;
+        while (true) {
+          const articles = await client.fetchUserArticles({
+            auditStatus: null,
+            pageNo,
+            pageSize,
+          });
+          if (articles.length === 0) break;
+          allJuejinArticles.push(...articles);
+          if (articles.length < pageSize) break;
+          pageNo++;
+        }
+
+        // 获取本地所有已发布到掘金的文章
+        const localArticles = await articleRepo.find({
+          where: { juejinArticleId: Not(IsNull()) },
+        });
+
+        let syncedCount = 0;
+        const updates: Array<{ id: number; status: string; articleId: string }> = [];
+
+        for (const local of localArticles) {
+          const juejinArticle = allJuejinArticles.find(
+            (a) => a.article_id === local.juejinArticleId
+          );
+
+          if (juejinArticle) {
+            // 根据掘金的审核状态更新本地状态
+            let newStatus: string;
+            switch (juejinArticle.article_info.audit_status) {
+              case 2:
+                newStatus = "published";
+                break;
+              case 1:
+                newStatus = "pending";
+                break;
+              case 3:
+                newStatus = "rejected";
+                break;
+              default:
+                newStatus = local.juejinStatus || "unknown";
+            }
+
+            if (local.juejinStatus !== newStatus) {
+              local.juejinStatus = newStatus;
+              local.juejinLastSyncedAt = new Date();
+              await articleRepo.save(local);
+              syncedCount++;
+              updates.push({
+                id: local.id,
+                status: newStatus,
+                articleId: local.juejinArticleId!,
+              });
+            }
+          }
+        }
+
+        return {
+          success: true,
+          message: `同步完成，更新了 ${syncedCount} 篇文章状态`,
+          syncedCount,
+          updates,
+        };
+      } catch (error) {
+        console.error("[Juejin] 同步文章状态失败:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "同步失败",
+        });
+      }
     }),
   }),
 });
