@@ -12,7 +12,7 @@
 
 services:
   server:
-    image: ghcr.io/zerohawkeye/penbridge:${VERSION:-latest}
+    image: ghcr.io/${GHCR_REPOSITORY:-zerohawkeye/penbridge}:${VERSION:-latest}
     container_name: pen-bridge
     ports:
       - "3000:3000"
