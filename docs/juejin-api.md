@@ -87,7 +87,7 @@ Cookie: sessionid=xxx; sessionid_ss=xxx; sid_tt=xxx; ...
 
 对于 PenBridge 应用，掘金的 **365 天有效期** 非常适合长期登录场景：
 
-1. **首次登录**: 使用 Puppeteer 打开浏览器让用户手动登录
+1. **首次登录**: 使用 Electron 登录窗口让用户手动登录
 2. **Cookie 保存**: 登录成功后保存所有认证相关 Cookie
 3. **定期检查**: 在调用 API 前检查 `sid_guard` 中的过期时间
 4. **提前提醒**: 在过期前 30 天提醒用户重新登录

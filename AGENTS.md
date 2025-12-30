@@ -17,7 +17,6 @@ PenBridge 是一个多平台文章管理与发布工具，支持：
 | 前端 | React 19 + TypeScript + TanStack Router + shadcn/ui + Tailwind CSS 4 + TanStack Query 4 + tRPC 10 |
 | 后端 | Bun + Hono + tRPC + TypeORM + sql.js |
 | 桌面端 | Electron + Electron Forge |
-| 自动化 | Puppeteer（浏览器自动化登录） |
 | 数据库 | SQLite（通过 sql.js，存储在 `packages/server/data/`） |
 
 ## 项目结构
@@ -106,7 +105,7 @@ import { AppDataSource } from "../db";
 import { User } from "../entities/User";
 
 // 3. 类型导入
-import type { Browser, Page } from "puppeteer";
+import type { BrowserWindow, Cookie } from "electron";
 ```
 
 ### 命名规范
