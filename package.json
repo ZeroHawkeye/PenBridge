@@ -1,0 +1,23 @@
+{
+  "name": "tencent-dev-blog",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "bun run --cwd packages/web dev",
+    "dev:server": "bun run --cwd packages/server dev",
+    "dev:electron": "concurrently \"bun run dev:web\" \"bun run --cwd electron dev\"",
+    "build:web": "bun run --cwd packages/web build",
+    "build:server": "bun run --cwd packages/server build",
+    "build:electron": "cd electron && npm run build",
+    "build": "bun run build:server && bun run build:web && bun run build:electron",
+    "pack:electron": "npm run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && npm run build:electron && npm run --prefix electron package",
+    "make:electron": "npm run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && npm run build:electron && npm run --prefix electron make"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "shx": "^0.4.0",
+    "typescript": "^5.9.3"
+  }
+}

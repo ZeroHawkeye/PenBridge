@@ -1,0 +1,261 @@
+name: Build Electron App
+
+on:
+  # 手动触发
+  workflow_dispatch:
+  # 推送标签时触发
+  push:
+    tags:
+      - "v*"
+
+# 设置权限，允许上传 release 资产
+permissions:
+  contents: write
+
+jobs:
+  # 构建前端（共享给所有平台）
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (root)
+        run: bun install
+
+      - name: Install dependencies (web)
+        run: bun install
+        working-directory: packages/web
+
+      - name: Build web
+        run: bun run build:web
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: packages/web/dist
+          retention-days: 1
+
+  # 生成图标（macOS 需要 .icns，Linux 需要 .png）
+  build-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick librsvg2-bin icnsutils
+
+      # 从 SVG 生成 PNG（多种尺寸）
+      - name: Generate PNG icons from SVG
+        working-directory: electron/assets
+        run: |
+          # 生成各种尺寸的 PNG
+          for size in 16 32 48 64 128 256 512 1024; do
+            rsvg-convert -w $size -h $size icon.svg -o icon_${size}.png
+          done
+          # 复制 256x256 作为默认 icon.png（Linux 使用）
+          cp icon_256.png icon.png
+
+      # 生成 macOS icns 文件
+      - name: Generate macOS icns
+        working-directory: electron/assets
+        run: |
+          mkdir -p icon.iconset
+          cp icon_16.png icon.iconset/icon_16x16.png
+          cp icon_32.png icon.iconset/icon_16x16@2x.png
+          cp icon_32.png icon.iconset/icon_32x32.png
+          cp icon_64.png icon.iconset/icon_32x32@2x.png
+          cp icon_128.png icon.iconset/icon_128x128.png
+          cp icon_256.png icon.iconset/icon_128x128@2x.png
+          cp icon_256.png icon.iconset/icon_256x256.png
+          cp icon_512.png icon.iconset/icon_256x256@2x.png
+          cp icon_512.png icon.iconset/icon_512x512.png
+          cp icon_1024.png icon.iconset/icon_512x512@2x.png
+          # 使用 png2icns 生成 icns（icnsutils 提供）
+          png2icns icon.icns icon_16.png icon_32.png icon_48.png icon_128.png icon_256.png icon_512.png
+          rm -rf icon.iconset icon_*.png
+
+      - name: Upload icons artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: icons
+          path: |
+            electron/assets/icon.png
+            electron/assets/icon.icns
+          retention-days: 1
+
+  # macOS 构建
+  build-macos:
+    needs: [build-web, build-icons]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: electron/web
+
+      - name: Download icons
+        uses: actions/download-artifact@v4
+        with:
+          name: icons
+          path: electron/assets
+
+      - name: Install Electron dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Build Electron
+        run: npm run build
+        working-directory: electron
+
+      - name: Package for macOS (x64)
+        run: npx electron-forge make --arch=x64
+        working-directory: electron
+
+      - name: Package for macOS (arm64)
+        run: npx electron-forge make --arch=arm64
+        working-directory: electron
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: electron/out/make/**/*
+          retention-days: 7
+
+  # Windows 构建
+  build-windows:
+    needs: build-web
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: electron/web
+
+      - name: Install Electron dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Build Electron
+        run: npm run build
+        working-directory: electron
+
+      - name: Package for Windows
+        run: npx electron-forge make
+        working-directory: electron
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: electron/out/make/**/*
+          retention-days: 7
+
+  # Linux 构建
+  build-linux:
+    needs: [build-web, build-icons]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: electron/web
+
+      - name: Download icons
+        uses: actions/download-artifact@v4
+        with:
+          name: icons
+          path: electron/assets
+
+      - name: Install Electron dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Install Linux makers
+        run: npm install --save-dev @electron-forge/maker-deb @electron-forge/maker-rpm
+        working-directory: electron
+
+      - name: Build Electron
+        run: npm run build
+        working-directory: electron
+
+      # 安装 Linux 打包所需的系统依赖
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg fakeroot rpm
+
+      - name: Package for Linux
+        run: npx electron-forge make --config forge.config.linux.ts
+        working-directory: electron
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: electron/out/make/**/*
+          retention-days: 7
+
+  # 创建 Release（仅在推送标签时）
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.AppImage

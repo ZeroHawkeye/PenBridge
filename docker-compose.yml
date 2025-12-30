@@ -1,0 +1,48 @@
+# 腾讯云开发者社区文章管理工具 - Docker Compose 配置
+# 用于本地开发和测试
+#
+# 使用方法：
+#   构建并启动：docker-compose up -d --build
+#   查看日志：docker-compose logs -f
+#   停止服务：docker-compose down
+#   重新构建：docker-compose build --no-cache
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+    image: tencent-dev-blog-server:latest
+    container_name: tencent-dev-blog-server
+    ports:
+      - "3000:3000"
+    volumes:
+      # 持久化数据目录（数据库和上传文件）
+      - server-data:/app/packages/server/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  server-data:
+    name: tencent-dev-blog-server-data
+
+# 可选：如果需要与前端一起部署，取消下面的注释
+# services:
+#   web:
+#     build:
+#       context: .
+#       dockerfile: packages/web/Dockerfile
+#     container_name: tencent-dev-blog-web
+#     ports:
+#       - "80:80"
+#     depends_on:
+#       - server
+#     restart: unless-stopped
