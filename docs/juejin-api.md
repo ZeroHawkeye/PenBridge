@@ -558,7 +558,7 @@ Cookie: sessionid=xxx; ...（完整认证Cookie）
     "token": {
       "AccessKeyId": "AKTP<your-access-key-id>",
       "SecretAccessKey": "<your-secret-access-key>",
-      "SessionToken": "STS2<base64-encoded-sts-token>...（Base64编码的STS凭证）",
+      "SessionToken": "STS2<base64-encoded-sts-token>",
       "ExpiredTime": "2025-12-30T18:04:45+08:00",
       "CurrentTime": "2025-12-30T16:04:45+08:00"
     }
