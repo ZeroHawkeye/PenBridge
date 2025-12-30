@@ -141,7 +141,7 @@ jobs:
           path: electron/out/make/**/*
           retention-days: 7
 
-  # Windows 构建
+  # Windows 构建（使用 electron-builder + NSIS 交互式安装程序）
   build-windows:
     needs: build-web
     runs-on: windows-latest
@@ -168,15 +168,17 @@ jobs:
         run: npm run build
         working-directory: electron
 
-      - name: Package for Windows
-        run: npx electron-forge make
+      - name: Package for Windows (NSIS installer)
+        run: npm run dist:win
         working-directory: electron
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: electron/out/make/**/*
+          path: |
+            electron/release/*.exe
+            electron/release/*.zip
           retention-days: 7
 
   # Linux 构建

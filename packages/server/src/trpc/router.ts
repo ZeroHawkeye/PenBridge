@@ -11,6 +11,7 @@ import {
 import { articleSyncService } from "../services/articleSync";
 import { schedulerService } from "../services/scheduler";
 import { emailService } from "../services/emailService";
+import { cleanupUnusedImages, deleteAllArticleImages } from "../services/imageCleanup";
 import {
   adminLogin,
   validateSession,
@@ -302,12 +303,55 @@ export const appRouter = t.router({
         };
       }),
 
-    // 获取单篇文章
+    // 获取单篇文章（完整数据，包含 content）
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         const articleRepo = AppDataSource.getRepository(Article);
         return articleRepo.findOne({ where: { id: input.id } });
+      }),
+
+    // 获取文章元数据（不含 content，用于快速加载）
+    getMeta: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const articleRepo = AppDataSource.getRepository(Article);
+        return articleRepo.findOne({
+          where: { id: input.id },
+          select: [
+            "id",
+            "title",
+            "summary",
+            "tags",
+            "status",
+            "folderId",
+            "order",
+            "scheduledAt",
+            "publishedAt",
+            "tencentDraftId",
+            "tencentArticleId",
+            "tencentArticleUrl",
+            "tencentTagIds",
+            "sourceType",
+            "lastSyncedAt",
+            "errorMessage",
+            "userId",
+            "createdAt",
+            "updatedAt",
+          ],
+        });
+      }),
+
+    // 获取文章内容（只返回 content，用于延迟加载）
+    getContent: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const articleRepo = AppDataSource.getRepository(Article);
+        const article = await articleRepo.findOne({
+          where: { id: input.id },
+          select: ["id", "content"],
+        });
+        return article ? { id: article.id, content: article.content } : null;
       }),
 
     // 创建文章
@@ -373,6 +417,16 @@ export const appRouter = t.router({
 
         await articleRepo.update(id, updateData);
 
+        // 如果更新了内容，异步清理未引用的图片
+        if (content !== null && content !== undefined) {
+          // 使用 setImmediate 异步执行，不阻塞响应
+          setImmediate(() => {
+            cleanupUnusedImages(id, content).catch((err) => {
+              console.error(`[Router] 清理文章 ${id} 图片失败:`, err);
+            });
+          });
+        }
+
         return articleRepo.findOne({ where: { id } });
       }),
 
@@ -382,6 +436,14 @@ export const appRouter = t.router({
       .mutation(async ({ input }) => {
         const articleRepo = AppDataSource.getRepository(Article);
         await articleRepo.delete(input.id);
+        
+        // 异步删除文章的所有上传图片
+        setImmediate(() => {
+          deleteAllArticleImages(input.id).catch((err) => {
+            console.error(`[Router] 删除文章 ${input.id} 图片失败:`, err);
+          });
+        });
+        
         return { success: true };
       }),
 
@@ -497,7 +559,7 @@ export const appRouter = t.router({
 
   // 文件夹相关
   folder: t.router({
-    // 获取文件夹树结构
+    // 获取文件夹树结构（只返回文件树所需的轻量字段，不包含 content）
     tree: protectedProcedure.query(async () => {
       const folderRepo = AppDataSource.getRepository(Folder);
       const articleRepo = AppDataSource.getRepository(Article);
@@ -507,8 +569,21 @@ export const appRouter = t.router({
         order: { order: "ASC", createdAt: "ASC" },
       });
 
-      // 获取所有文章
+      // 获取所有文章（只选择文件树需要的字段，排除 content 大字段）
       const articles = await articleRepo.find({
+        select: [
+          "id",
+          "title",
+          "status",
+          "folderId",
+          "order",
+          "createdAt",
+          "updatedAt",
+          "scheduledAt",
+          "publishedAt",
+          "tencentArticleId",
+          "tencentArticleUrl",
+        ],
         order: { order: "ASC", createdAt: "DESC" },
       });
 

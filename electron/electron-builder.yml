@@ -1,0 +1,115 @@
+# electron-builder 配置文件
+# 文档: https://www.electron.build/configuration
+
+appId: com.penbridge.app
+productName: PenBridge
+copyright: Copyright © 2026 PenBridge Team
+
+# 输出目录
+directories:
+  output: release
+  buildResources: assets
+
+# 打包文件配置
+files:
+  - dist/**/*
+  - web/**/*
+  - "!**/*.ts"
+  - "!**/tsconfig.json"
+  - "!**/forge.config*.ts"
+  - "!**/electron-builder.yml"
+
+# 使用 asar 打包
+asar: true
+
+# Windows 配置
+win:
+  icon: assets/icon.ico
+  # 跳过代码签名（没有证书时设置为 null）
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+        # - ia32  # 如需支持 32 位取消注释
+
+# NSIS 安装程序配置 - 交互式安装
+nsis:
+  # 允许用户选择安装目录
+  allowToChangeInstallationDirectory: true
+  
+  # 一键安装模式关闭，显示安装向导
+  oneClick: false
+  
+  # 每台机器安装（安装到 Program Files，需要管理员权限）
+  # 设为 false 则安装到用户目录，不需要管理员权限
+  perMachine: true
+  
+  # 允许提升权限（以管理员身份安装）
+  allowElevation: true
+  
+  # 创建桌面快捷方式
+  createDesktopShortcut: true
+  
+  # 创建开始菜单快捷方式
+  createStartMenuShortcut: true
+  
+  # 开始菜单文件夹名称
+  shortcutName: PenBridge
+  
+  # 安装完成后运行程序
+  runAfterFinish: true
+  
+  # 卸载时显示确认对话框
+  # uninstallDisplayName: PenBridge
+  
+  # 安装程序图标
+  installerIcon: assets/icon.ico
+  
+  # 卸载程序图标
+  uninstallerIcon: assets/icon.ico
+  
+  # 安装向导侧边图片 (164x314 像素，可选)
+  # installerSidebar: assets/installerSidebar.bmp
+  
+  # 安装向导头部图片 (150x57 像素，可选)
+  # installerHeader: assets/installerHeader.bmp
+  
+  # 许可协议文件（可选）
+  # license: LICENSE.txt
+  
+  # 支持多语言（中文）
+  language: 2052
+  
+  # 包含的语言
+  # installerLanguages:
+  #   - zh_CN
+  #   - en_US
+
+# macOS 配置（如需要）
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+# Linux 配置（如需要）
+linux:
+  icon: assets
+  category: Office
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+
+# 发布配置（可选，用于自动更新）
+# publish:
+#   provider: github
+#   owner: your-username
+#   repo: your-repo

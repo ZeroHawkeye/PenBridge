@@ -1,0 +1,30 @@
+# 生产部署 docker-compose
+# 
+# 使用方法：
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: pen-bridge:v1
+    container_name: pen-bridge
+    ports:
+      - "3000:3000"
+    volumes:
+      - server-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  server-data:
+    name: pen-bridge-data

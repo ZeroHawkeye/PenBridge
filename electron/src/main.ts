@@ -47,14 +47,14 @@ function createMainWindow() {
   if (isDev) {
     // 开发环境：加载 Vite 开发服务器
     mainWindow.loadURL(WEB_URL);
+    // 开发环境自动打开开发者工具
     mainWindow.webContents.openDevTools();
   } else {
     // 生产环境：加载打包后的前端
     const webPath = path.join(__dirname, "../web/index.html");
     console.log("Loading web from:", webPath);
     mainWindow.loadFile(webPath);
-    // 调试模式：打开开发者工具
-    mainWindow.webContents.openDevTools();
+    // 生产环境不自动打开开发者工具，可通过快捷键 Ctrl+Shift+I 或 F12 打开
   }
 
   // 注册 Ctrl+Shift+I 快捷键打开/关闭开发者工具

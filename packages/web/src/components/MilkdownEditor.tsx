@@ -66,14 +66,37 @@ function createUploadHandler(articleId: number) {
   };
 }
 
+// 缓存已上传的 base64 图片，避免重复上传（使用 base64 内容的 hash 作为 key）
+const uploadedBase64Cache = new Map<string, string>();
+
+// 生成 base64 内容的简单 hash（用于缓存键）
+function hashBase64(base64: string): string {
+  // 使用 base64 数据部分的前200个字符 + 长度作为 hash
+  const dataStart = base64.indexOf(",") + 1;
+  const dataPart = base64.slice(dataStart, dataStart + 200);
+  return `${dataPart.length}_${base64.length}_${dataPart.slice(0, 50)}`;
+}
+
 // 创建 proxyDomURL 处理器，将 base64 图片上传到服务器
 function createProxyDomURL(articleId: number) {
   return async function proxyDomURL(url: string): Promise<string> {
     // 如果是 base64 图片，上传到服务器
     if (url.startsWith("data:image/")) {
+      // 检查缓存，避免重复上传相同的图片
+      const cacheKey = hashBase64(url);
+      const cachedUrl = uploadedBase64Cache.get(cacheKey);
+      if (cachedUrl) {
+        console.log("[MilkdownEditor] 使用缓存的图片 URL:", cachedUrl);
+        return cachedUrl;
+      }
+
       try {
+        console.log("[MilkdownEditor] 上传 base64 图片...");
         const file = base64ToFile(url, `paste-${Date.now()}`);
         const uploadedUrl = await uploadImageToServer(file, articleId);
+        // 缓存上传结果
+        uploadedBase64Cache.set(cacheKey, uploadedUrl);
+        console.log("[MilkdownEditor] 图片上传成功:", uploadedUrl);
         return uploadedUrl;
       } catch (error) {
         console.error("上传粘贴的图片失败:", error);
@@ -84,6 +107,55 @@ function createProxyDomURL(articleId: number) {
     // 其他 URL 直接返回
     return url;
   };
+}
+
+// 导出：将 markdown 内容中的 base64 图片替换为服务器 URL（用于保存前处理）
+export async function replaceBase64ImagesInMarkdown(
+  markdown: string,
+  articleId: number
+): Promise<string> {
+  // 匹配 markdown 中的 base64 图片: ![alt](data:image/...)
+  const base64ImageRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
+  
+  const matches: { fullMatch: string; alt: string; base64: string }[] = [];
+  let match;
+  while ((match = base64ImageRegex.exec(markdown)) !== null) {
+    matches.push({
+      fullMatch: match[0],
+      alt: match[1],
+      base64: match[2],
+    });
+  }
+
+  if (matches.length === 0) {
+    return markdown;
+  }
+
+  console.log(`[MilkdownEditor] 发现 ${matches.length} 个 base64 图片需要替换`);
+
+  let result = markdown;
+  for (const { fullMatch, alt, base64 } of matches) {
+    // 检查缓存
+    const cacheKey = hashBase64(base64);
+    let uploadedUrl = uploadedBase64Cache.get(cacheKey);
+
+    if (!uploadedUrl) {
+      try {
+        const file = base64ToFile(base64, `inline-${Date.now()}`);
+        uploadedUrl = await uploadImageToServer(file, articleId);
+        uploadedBase64Cache.set(cacheKey, uploadedUrl);
+      } catch (error) {
+        console.error("替换 base64 图片失败:", error);
+        continue; // 跳过这个图片
+      }
+    }
+
+    // 替换为服务器 URL
+    const newImageMarkdown = `![${alt}](${uploadedUrl})`;
+    result = result.replace(fullMatch, newImageMarkdown);
+  }
+
+  return result;
 }
 
 interface MilkdownEditorProps {

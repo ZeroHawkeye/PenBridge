@@ -10,15 +10,15 @@
 services:
   server:
     build:
-      context: .
-      dockerfile: packages/server/Dockerfile
-    image: tencent-dev-blog-server:v1
-    container_name: tencent-dev-blog-server
+      context: ./packages/server
+      dockerfile: Dockerfile
+    image: pen-bridge:v1.2
+    container_name: pen-bridge
     ports:
       - "3000:3000"
     volumes:
       # 持久化数据目录（数据库和上传文件）
-      - server-data:/app/packages/server/data
+      - server-data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -40,7 +40,7 @@ services:
 
 volumes:
   server-data:
-    name: tencent-dev-blog-server-data
+    name: pen-bridge-data
 
 # 可选：如果需要与前端一起部署，取消下面的注释
 # services:

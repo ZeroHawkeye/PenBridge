@@ -8,6 +8,7 @@ dist/
 # Electron build outputs
 electron/out/
 electron/web/
+electron/release
 
 # Database
 packages/server/data/

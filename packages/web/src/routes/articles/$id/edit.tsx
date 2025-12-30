@@ -8,6 +8,7 @@ import { trpc } from "@/utils/trpc";
 import PublishMenu from "@/components/PublishMenu";
 import ArticleEditorLayout from "@/components/ArticleEditorLayout";
 import ImportWordSettings from "@/components/ImportWordSettings";
+import { replaceBase64ImagesInMarkdown } from "@/components/MilkdownEditor";
 
 // 保存状态类型
 type SaveStatus = "idle" | "saving" | "saved";
@@ -38,9 +39,22 @@ function EditArticlePage() {
   // 标题输入框 ref
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: article, isLoading } = trpc.article.get.useQuery({
+  // 第一步：快速加载文章元数据（不含 content，响应速度快）
+  const { data: articleMeta, isLoading } = trpc.article.getMeta.useQuery({
     id: Number(id),
   });
+
+  // 第二步：延迟加载文章内容（大字段，可能较慢）
+  const { data: articleContent } = trpc.article.getContent.useQuery(
+    { id: Number(id) },
+    { enabled: !!articleMeta } // 元数据加载完成后再加载内容
+  );
+
+  // 合并元数据和内容，兼容原有逻辑
+  const article = articleMeta ? {
+    ...articleMeta,
+    content: articleContent?.content ?? "",
+  } : null;
 
   const updateMutation = trpc.article.update.useMutation({
     onSuccess: () => {
@@ -67,7 +81,17 @@ function EditArticlePage() {
   const doSave = useCallback(
     async (titleToSave: string, contentToSave: string, summaryToSave: string) => {
       // 如果内容为空，使用占位符（后端要求 content 至少 1 个字符）
-      const finalContent = contentToSave?.trim() ? contentToSave : " ";
+      let finalContent = contentToSave?.trim() ? contentToSave : " ";
+      
+      // 保存前：将 base64 图片替换为服务器 URL（避免下次加载时重复上传）
+      if (finalContent.includes("data:image/")) {
+        try {
+          finalContent = await replaceBase64ImagesInMarkdown(finalContent, Number(id));
+        } catch (error) {
+          console.error("替换 base64 图片失败:", error);
+        }
+      }
+
       setSaveStatus("saving");
       try {
         await updateMutation.mutateAsync({
@@ -114,24 +138,33 @@ function EditArticlePage() {
   // 用于跟踪是否已加载过文章数据
   const hasLoadedRef = useRef(false);
   const loadedArticleIdRef = useRef<number | null>(null);
+  const contentLoadedRef = useRef(false);
 
+  // 元数据加载完成后立即更新（不包含 content）
   useEffect(() => {
-    if (article) {
-      // 只在首次加载或文章 ID 变化时更新编辑器
-      const isNewArticle = loadedArticleIdRef.current !== article.id;
+    if (articleMeta) {
+      // 只在首次加载或文章 ID 变化时更新
+      const isNewArticle = loadedArticleIdRef.current !== articleMeta.id;
 
-      setTitle(article.title || "");
-      setSummary(article.summary || "");
-      setTencentTagIds(article.tencentTagIds || []);
-      setSourceType(article.sourceType || 1);
-      setScheduledAt(article.scheduledAt ? dayjs(article.scheduledAt) : null);
+      setTitle(articleMeta.title || "");
+      setSummary(articleMeta.summary || "");
+      setTencentTagIds(articleMeta.tencentTagIds || []);
+      setSourceType(articleMeta.sourceType || 1);
+      setScheduledAt(articleMeta.scheduledAt ? dayjs(articleMeta.scheduledAt) : null);
 
-      // 只在首次加载该文章时设置内容和重新渲染编辑器
       if (isNewArticle) {
-        setContent(article.content || "");
-        setEditorKey((prev) => prev + 1);
-        loadedArticleIdRef.current = article.id;
+        loadedArticleIdRef.current = articleMeta.id;
+        contentLoadedRef.current = false; // 重置内容加载标记
       }
+    }
+  }, [articleMeta]);
+
+  // 内容加载完成后更新编辑器
+  useEffect(() => {
+    if (articleContent && articleMeta && !contentLoadedRef.current) {
+      setContent(articleContent.content || "");
+      setEditorKey((prev) => prev + 1);
+      contentLoadedRef.current = true;
 
       // 标记初始加载完成（延迟一下避免编辑器初始化触发保存）
       if (!hasLoadedRef.current) {
@@ -141,7 +174,7 @@ function EditArticlePage() {
         }, 500);
       }
     }
-  }, [article]);
+  }, [articleContent, articleMeta]);
 
   // 新建文章时聚焦标题并全选
   useEffect(() => {

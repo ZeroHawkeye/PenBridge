@@ -12,8 +12,8 @@
     "build:server": "bun run --cwd packages/server build",
     "build:electron": "cd electron && npm run build",
     "build": "bun run build:server && bun run build:web && bun run build:electron",
-    "pack:electron": "npm run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && npm run build:electron && npm run --prefix electron package",
-    "make:electron": "npm run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && npm run build:electron && npm run --prefix electron make"
+    "dist:electron": "bun run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && cd electron && npm install && npm run build && npm run dist",
+    "dist:electron:win": "bun run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && cd electron && npm install && npm run build && npm run dist:win"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

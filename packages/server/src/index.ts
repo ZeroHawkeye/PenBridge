@@ -15,7 +15,7 @@ const app = new Hono();
 // 上传目录路径
 const UPLOAD_DIR = "data/uploads";
 
-// CORS - 允许 Electron 应用（file:// 协议 origin 为 null）和开发服务器
+// CORS - 允许 Electron 应用、开发服务器和生产部署
 app.use(
   "/*",
   cors({
@@ -25,10 +25,28 @@ app.use(
         "http://localhost:5173",
         "http://localhost:3000",
       ];
+      
       // file:// 协议的 origin 为 null，Electron 打包后需要允许
-      if (!origin || origin === "null" || allowedOrigins.includes(origin)) {
+      if (!origin || origin === "null") {
         return origin || "*";
       }
+      
+      // 允许配置的来源
+      if (allowedOrigins.includes(origin)) {
+        return origin;
+      }
+      
+      // 允许同一 IP 的不同端口访问（生产环境部署）
+      try {
+        const url = new URL(origin);
+        // 允许任何 http/https 来源（生产环境可能有不同端口）
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          return origin;
+        }
+      } catch {
+        // URL 解析失败，拒绝
+      }
+      
       return null;
     },
     credentials: true,
