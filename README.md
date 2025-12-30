@@ -2,23 +2,65 @@
   <img src="packages/web/public/icon.svg" alt="PenBridge Logo" width="120" height="120">
 </p>
 
-<h1 align="center">PenBridge</h1>
+<h1 align="center">🖊️ PenBridge</h1>
 
 <p align="center">
   <strong>跨平台文章管理与一键发布工具</strong>
 </p>
 
 <p align="center">
-  写作一次，发布到所有平台
+  ✨ 写作一次，发布到所有平台 ✨
+</p>
+
+<p align="center">
+  <a href="https://github.com/ZeroHawkeye/PenBridge">
+    <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
+  </a>
+  <a href="https://github.com/ZeroHawkeye/PenBridge">
+    <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React">
+  </a>
+  <a href="https://github.com/ZeroHawkeye/PenBridge">
+    <img src="https://img.shields.io/badge/Electron-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9" alt="Electron">
+  </a>
+  <a href="https://github.com/ZeroHawkeye/PenBridge">
+    <img src="https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white" alt="Bun">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ZeroHawkeye/PenBridge/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg" alt="License: CC BY-NC-SA 4.0">
+  </a>
+  <a href="https://github.com/ZeroHawkeye/PenBridge/stargazers">
+    <img src="https://img.shields.io/github/stars/ZeroHawkeye/PenBridge?style=social" alt="GitHub Stars">
+  </a>
+  <a href="https://github.com/ZeroHawkeye/PenBridge/issues">
+    <img src="https://img.shields.io/github/issues/ZeroHawkeye/PenBridge" alt="GitHub Issues">
+  </a>
 </p>
 
 <p align="center">
   <a href="#功能特性">功能特性</a> •
   <a href="#支持平台">支持平台</a> •
+  <a href="#技术架构">技术架构</a> •
   <a href="#快速开始">快速开始</a> •
   <a href="#使用说明">使用说明</a> •
+  <a href="#开发指南">开发指南</a> •
   <a href="#许可证">许可证</a>
 </p>
+
+---
+
+## 💡 为什么选择 PenBridge？
+
+作为内容创作者，您是否遇到过以下困扰？
+
+- 📋 写完一篇文章，需要手动复制粘贴到多个平台
+- 🔄 不同平台格式不兼容，需要反复调整
+- ⏰ 想要定时发布，却只能设置闹钟手动操作
+- 📂 文章越来越多，管理越来越混乱
+
+**PenBridge** 正是为解决这些问题而生！一次编写，多平台发布，让您专注于创作本身。
 
 ---
 
@@ -98,13 +140,49 @@
 | <img src="https://lf3-cdn-tos.bytescm.com/obj/static/xitu_juejin_web/static/favicons/favicon-32x32.png" width="20"> **掘金** | ✅ 已支持 | 立即发布、分类选择、标签搜索 |
 | <img src="https://g.csdnimg.cn/static/logo/favicon32.ico" width="20"> **CSDN** | 🚧 开发中 | 敬请期待 |
 
+> 💬 想要支持更多平台？欢迎提交 [Issue](https://github.com/ZeroHawkeye/PenBridge/issues) 告诉我们！
+
 ---
 
-## 快速开始
+## 🏗️ 技术架构
+
+PenBridge 采用现代化的技术栈，确保高性能和良好的开发体验：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Electron 桌面应用                           │
+├─────────────────────────────────────────────────────────────────┤
+│  前端 (React 19)                  │  后端 (Bun + Hono)           │
+│  ├─ TanStack Router              │  ├─ tRPC 10                  │
+│  ├─ TanStack Query 4             │  ├─ TypeORM                   │
+│  ├─ shadcn/ui + Tailwind CSS 4   │  ├─ sql.js (SQLite)          │
+│  └─ Milkdown 编辑器               │  └─ Puppeteer (自动化)        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| 模块 | 技术栈 |
+|:---|:---|
+| **前端框架** | React 19 + TypeScript |
+| **路由管理** | TanStack Router |
+| **状态管理** | TanStack Query 4 |
+| **UI 组件** | shadcn/ui + Ant Design |
+| **样式方案** | Tailwind CSS 4 |
+| **编辑器** | Milkdown (基于 ProseMirror) |
+| **API 通信** | tRPC 10 |
+| **后端运行时** | Bun |
+| **Web 框架** | Hono |
+| **数据库** | SQLite (sql.js) |
+| **ORM** | TypeORM |
+| **桌面端** | Electron + Electron Forge |
+| **浏览器自动化** | Puppeteer |
+
+---
+
+## 🚀 快速开始
 
 ### 下载安装
 
-前往 [Releases](https://github.com/zero-ljz/pen-bridge/releases) 页面下载适合你系统的版本：
+前往 [Releases](https://github.com/ZeroHawkeye/PenBridge/releases) 页面下载适合你系统的版本：
 
 | 系统 | 下载 |
 |:---:|:---:|
@@ -116,8 +194,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/zero-ljz/pen-bridge.git
-cd pen-bridge
+git clone https://github.com/ZeroHawkeye/PenBridge.git
+cd PenBridge
 
 # 安装依赖
 bun install
@@ -126,12 +204,12 @@ bun install
 bun run build
 
 # 打包 Electron 应用
-bun run make:electron
+bun run dist:electron
 ```
 
 ---
 
-## 使用说明
+## 📖 使用说明
 
 ### 1. 首次配置
 
@@ -170,7 +248,49 @@ bun run make:electron
 
 ---
 
-## 项目结构
+## 🛠️ 开发指南
+
+### 开发模式
+
+```bash
+# 启动后端服务（端口 3000）
+bun run dev:server
+
+# 启动前端开发服务器（端口 5173）
+bun run dev:web
+
+# 启动 Electron 开发模式
+bun run dev:electron
+```
+
+### 构建项目
+
+```bash
+# 构建全部
+bun run build
+
+# 单独构建
+bun run build:server   # 构建后端
+bun run build:web      # 构建前端
+bun run build:electron # 构建 Electron
+```
+
+### 添加依赖
+
+```bash
+# 后端依赖
+bun add <package> --cwd packages/server
+
+# 前端依赖
+bun add <package> --cwd packages/web
+
+# 根目录开发依赖
+bun add -d <package>
+```
+
+---
+
+## 📁 项目结构
 
 ```
 pen-bridge/
@@ -184,12 +304,37 @@ pen-bridge/
 
 ---
 
-## 许可证
+## ⚖️ 许可证
 
-[MIT License](LICENSE)
+本项目采用 [CC BY-NC-SA 4.0](LICENSE) 许可证。
+
+这意味着您可以：
+- ✅ 自由地共享和修改本项目
+- ✅ 在非商业项目中使用
+
+但您必须：
+- 📝 注明原作者并提供许可证链接
+- 🚫 不得用于商业目的
+- 🔄 修改后的作品需采用相同的许可证
+
+详细条款请参阅 [LICENSE](LICENSE) 文件。
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+- 🐛 [报告 Bug](https://github.com/ZeroHawkeye/PenBridge/issues/new?labels=bug)
+- 💡 [功能建议](https://github.com/ZeroHawkeye/PenBridge/issues/new?labels=enhancement)
+- 📖 [文档改进](https://github.com/ZeroHawkeye/PenBridge/issues/new?labels=documentation)
 
 ---
 
 <p align="center">
-  如果这个项目对你有帮助，欢迎 ⭐ Star 支持
+  如果这个项目对你有帮助，欢迎 ⭐ Star 支持！
+</p>
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/ZeroHawkeye">ZeroHawkeye</a>
 </p>
