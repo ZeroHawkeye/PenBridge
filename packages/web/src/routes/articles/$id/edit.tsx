@@ -231,13 +231,8 @@ function EditArticlePage() {
       message.error("请输入文章内容");
       return;
     }
-    await updateMutation.mutateAsync({
-      id: Number(id),
-      title,
-      content,
-      summary: summary || undefined,
-      scheduledAt: scheduledAt?.toISOString(),
-    });
+    // 使用 doSave 来保存，确保 base64 图片被正确替换为 URL
+    await doSave(title, content, summary);
   };
 
   if (isLoading) {
