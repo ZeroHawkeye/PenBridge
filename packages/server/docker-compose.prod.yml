@@ -1,14 +1,18 @@
 # 生产部署 docker-compose
-# 
+# 使用 GitHub Container Registry 的预构建镜像
+#
 # 使用方法：
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 指定版本：
+#   VERSION=1.0.0 docker compose -f docker-compose.prod.yml up -d
+#
+# 使用最新版本：
+#   docker compose -f docker-compose.prod.yml up -d (默认使用 latest)
 
 services:
   server:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
-    image: pen-bridge:v1
+    image: ghcr.io/zerohawkeye/penbridge:${VERSION:-latest}
     container_name: pen-bridge
     ports:
       - "3000:3000"

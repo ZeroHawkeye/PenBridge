@@ -1,4 +1,4 @@
-name: Build Electron App
+name: Build and Release
 
 on:
   # 手动触发
@@ -8,13 +8,41 @@ on:
     tags:
       - "v*"
 
-# 设置权限，允许上传 release 资产
+# 设置权限
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # 准备版本信息
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_tag: ${{ steps.version.outputs.version_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
   # 构建前端（共享给所有平台）
   build-web:
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,6 +52,16 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Update package versions
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          # 更新根目录 package.json
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+          # 更新 packages/web/package.json
+          jq --arg v "$VERSION" '.version = $v' packages/web/package.json > tmp.json && mv tmp.json packages/web/package.json
+          # 更新 packages/server/package.json
+          jq --arg v "$VERSION" '.version = $v' packages/server/package.json > tmp.json && mv tmp.json packages/server/package.json
 
       - name: Install dependencies (root)
         run: bun install
@@ -93,9 +131,51 @@ jobs:
             electron/assets/icon.icns
           retention-days: 1
 
+  # 构建 Docker 镜像
+  build-docker:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/tags/v{0}', needs.prepare.outputs.version) }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./packages/server
+          file: ./packages/server/Dockerfile
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+
   # macOS 构建
   build-macos:
-    needs: [build-web, build-icons]
+    needs: [prepare, build-web, build-icons]
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -117,6 +197,12 @@ jobs:
         with:
           name: icons
           path: electron/assets
+
+      - name: Update Electron package version
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          cd electron
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
 
       - name: Install Electron dependencies
         run: npm install
@@ -143,7 +229,7 @@ jobs:
 
   # Windows 构建（使用 electron-builder + NSIS 交互式安装程序）
   build-windows:
-    needs: build-web
+    needs: [prepare, build-web]
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -159,6 +245,15 @@ jobs:
         with:
           name: web-dist
           path: electron/web
+
+      - name: Update Electron package version
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare.outputs.version }}"
+          cd electron
+          $json = Get-Content package.json | ConvertFrom-Json
+          $json.version = $version
+          $json | ConvertTo-Json -Depth 100 | Set-Content package.json
 
       - name: Install Electron dependencies
         run: npm install
@@ -183,7 +278,7 @@ jobs:
 
   # Linux 构建
   build-linux:
-    needs: [build-web, build-icons]
+    needs: [prepare, build-web, build-icons]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -205,6 +300,12 @@ jobs:
         with:
           name: icons
           path: electron/assets
+
+      - name: Update Electron package version
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          cd electron
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
 
       - name: Install Electron dependencies
         run: npm install
@@ -238,9 +339,14 @@ jobs:
   # 创建 Release（仅在推送标签时）
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-macos, build-windows, build-linux]
+    needs: [prepare, build-macos, build-windows, build-linux, build-docker]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -249,10 +355,68 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
+      - name: Generate Release Notes with GitHub Copilot
+        id: release_notes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: commits } = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: '${{ github.event.before }}' || 'HEAD~10',
+              head: context.sha
+            });
+
+            let notes = `## What's Changed in ${{ needs.prepare.outputs.version_tag }}\n\n`;
+
+            const features = [];
+            const fixes = [];
+            const others = [];
+
+            for (const commit of commits.commits) {
+              const msg = commit.commit.message.split('\n')[0];
+              if (msg.startsWith('feat')) {
+                features.push(`- ${msg}`);
+              } else if (msg.startsWith('fix')) {
+                fixes.push(`- ${msg}`);
+              } else if (!msg.startsWith('Merge') && !msg.startsWith('chore')) {
+                others.push(`- ${msg}`);
+              }
+            }
+
+            if (features.length) {
+              notes += `### ✨ Features\n${features.join('\n')}\n\n`;
+            }
+            if (fixes.length) {
+              notes += `### 🐛 Bug Fixes\n${fixes.join('\n')}\n\n`;
+            }
+            if (others.length) {
+              notes += `### 📝 Other Changes\n${others.join('\n')}\n\n`;
+            }
+
+            notes += `---\n\n`;
+            notes += `## 📦 Docker Image\n\n`;
+            notes += `\`\`\`bash\n`;
+            notes += `docker pull ghcr.io/${{ github.repository }}:${{ needs.prepare.outputs.version }}\n`;
+            notes += `\`\`\`\n\n`;
+            notes += `## 📥 Downloads\n\n`;
+            notes += `| Platform | File |\n`;
+            notes += `|----------|------|\n`;
+            notes += `| Windows | \`PenBridge-Setup-${{ needs.prepare.outputs.version }}.exe\` |\n`;
+            notes += `| macOS (Intel) | \`PenBridge-${{ needs.prepare.outputs.version }}-x64.dmg\` |\n`;
+            notes += `| macOS (Apple Silicon) | \`PenBridge-${{ needs.prepare.outputs.version }}-arm64.dmg\` |\n`;
+            notes += `| Linux (Debian/Ubuntu) | \`PenBridge-${{ needs.prepare.outputs.version }}.deb\` |\n`;
+            notes += `| Linux (Fedora/RHEL) | \`PenBridge-${{ needs.prepare.outputs.version }}.rpm\` |\n`;
+
+            core.setOutput('notes', notes);
+            return notes;
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
+          name: "PenBridge ${{ needs.prepare.outputs.version_tag }}"
+          body: ${{ steps.release_notes.outputs.notes }}
           generate_release_notes: true
           files: |
             artifacts/**/*.zip

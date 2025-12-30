@@ -6,13 +6,18 @@
 #   查看日志：docker-compose logs -f
 #   停止服务：docker-compose down
 #   重新构建：docker-compose build --no-cache
+#
+# 生产环境推荐使用 GitHub Container Registry 的镜像：
+#   docker pull ghcr.io/zerohawkeye/penbridge:latest
+#   或指定版本：docker pull ghcr.io/zerohawkeye/penbridge:1.0.0
 
 services:
   server:
     build:
       context: ./packages/server
       dockerfile: Dockerfile
-    image: pen-bridge:v0.2.2
+    # 本地构建时使用此镜像名，生产环境请使用 ghcr.io/zerohawkeye/penbridge:版本号
+    image: pen-bridge:local
     container_name: pen-bridge
     ports:
       - "3000:3000"
