@@ -355,10 +355,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download all artifacts
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: "*-build"
+          merge-multiple: false
 
       - name: Display structure of downloaded files
         run: ls -R artifacts
