@@ -20,7 +20,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { PendingChange } from "./types";
 import { generateOptimizedDiff, generateChangeSummary } from "./tools/optimizedDiff";
-import type { DiffLine } from "./tools/optimizedDiff";
 
 interface InlineDiffPreviewProps {
   pendingChange: PendingChange;
