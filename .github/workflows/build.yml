@@ -272,7 +272,7 @@ jobs:
         run: npm run build
         working-directory: electron
 
-      - name: Package for Windows (NSIS installer)
+      - name: Package for Windows (NSIS installer x64 + arm64)
         run: npm run dist:win
         working-directory: electron
         env:
@@ -287,9 +287,10 @@ jobs:
             electron/release/*.zip
             electron/release/*.yml
             electron/release/*.yaml
+            electron/release/*.blockmap
           retention-days: 7
 
-  # Linux 构建
+  # Linux 构建（使用 electron-builder）
   build-linux:
     needs: [prepare, build-web, build-icons]
     runs-on: ubuntu-latest
@@ -324,29 +325,32 @@ jobs:
         run: npm install
         working-directory: electron
 
-      - name: Install Linux makers
-        run: npm install --save-dev @electron-forge/maker-deb @electron-forge/maker-rpm
-        working-directory: electron
-
       - name: Build Electron
         run: npm run build
         working-directory: electron
 
-      # 安装 Linux 打包所需的系统依赖
+      # 安装 Linux 打包所需的系统依赖（包括 ARM64 交叉编译支持）
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg fakeroot rpm
 
-      - name: Package for Linux
-        run: npx electron-forge make --config forge.config.linux.ts
+      - name: Package for Linux (x64 + arm64)
+        run: npm run dist:linux
         working-directory: electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: electron/out/make/**/*
+          path: |
+            electron/release/*.AppImage
+            electron/release/*.deb
+            electron/release/*.rpm
+            electron/release/*.yml
+            electron/release/*.yaml
           retention-days: 7
 
   # 部署到服务器
@@ -500,13 +504,14 @@ jobs:
             notes += `docker pull ghcr.io/${{ github.repository }}:${{ needs.prepare.outputs.version }}\n`;
             notes += `\`\`\`\n\n`;
             notes += `## 📥 Downloads\n\n`;
-            notes += `| Platform | File |\n`;
-            notes += `|----------|------|\n`;
-            notes += `| Windows | \`PenBridge-Setup-${{ needs.prepare.outputs.version }}.exe\` |\n`;
-            notes += `| macOS (Intel) | \`PenBridge-${{ needs.prepare.outputs.version }}-x64.dmg\` |\n`;
-            notes += `| macOS (Apple Silicon) | \`PenBridge-${{ needs.prepare.outputs.version }}-arm64.dmg\` |\n`;
-            notes += `| Linux (Debian/Ubuntu) | \`PenBridge-${{ needs.prepare.outputs.version }}.deb\` |\n`;
-            notes += `| Linux (Fedora/RHEL) | \`PenBridge-${{ needs.prepare.outputs.version }}.rpm\` |\n`;
+            notes += `| Platform | Architecture | File |\n`;
+            notes += `|----------|--------------|------|\n`;
+            notes += `| Windows | x64 | \`PenBridge-Setup-${{ needs.prepare.outputs.version }}-x64.exe\` |\n`;
+            notes += `| Windows | ARM64 | \`PenBridge-Setup-${{ needs.prepare.outputs.version }}-arm64.exe\` |\n`;
+            notes += `| macOS | Intel (x64) | \`PenBridge-darwin-x64-${{ needs.prepare.outputs.version }}.zip\` |\n`;
+            notes += `| macOS | Apple Silicon (ARM64) | \`PenBridge-darwin-arm64-${{ needs.prepare.outputs.version }}.zip\` |\n`;
+            notes += `| Linux | x64 | \`PenBridge-${{ needs.prepare.outputs.version }}-x64.AppImage\` / \`.deb\` |\n`;
+            notes += `| Linux | ARM64 | \`PenBridge-${{ needs.prepare.outputs.version }}-arm64.AppImage\` / \`.deb\` |\n`;
 
             core.setOutput('notes', notes);
             return notes;

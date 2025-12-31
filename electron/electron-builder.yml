@@ -25,11 +25,13 @@ asar: true
 # Windows 配置
 win:
   icon: assets/icon.ico
+  # 统一 Windows 安装包命名格式，避免生成重复文件
+  artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
   target:
     - target: nsis
       arch:
         - x64
-        # - ia32  # 如需支持 32 位取消注释
+        - arm64
 
 # NSIS 安装程序配置 - 交互式安装
 nsis:
@@ -98,13 +100,17 @@ mac:
 linux:
   icon: assets
   category: Office
+  # 统一 Linux 安装包命名格式
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   target:
     - target: AppImage
       arch:
         - x64
+        - arm64
     - target: deb
       arch:
         - x64
+        - arm64
 
 # 发布配置 - 用于自动更新
 publish:
