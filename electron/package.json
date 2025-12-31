@@ -2,7 +2,10 @@
   "name": "pen-bridge-electron",
   "version": "0.3.5",
   "description": "PenBridge - 文章管理与发布工具",
-  "author": "PenBridge Team",
+  "author": {
+    "name": "PenBridge Team",
+    "email": "penbridge@users.noreply.github.com"
+  },
   "main": "dist/main.js",
   "files": [
     "dist",
