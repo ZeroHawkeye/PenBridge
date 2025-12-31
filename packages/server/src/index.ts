@@ -1242,7 +1242,20 @@ if (existsSync(PUBLIC_DIR)) {
   app.use("/*", serveStatic({ root: PUBLIC_DIR }));
 
   // SPA 回退：所有未匹配的路由返回 index.html
+  // 注意：API 路径不应该被 SPA 回退处理
   app.get("*", async (c) => {
+    const path = c.req.path;
+
+    // 排除 API 路径，这些路径应该由前面定义的路由处理
+    // 如果请求到达这里说明路由未匹配，返回 404
+    if (path === "/health" ||
+        path === "/api" ||
+        path.startsWith("/api/") ||
+        path.startsWith("/trpc/") ||
+        path.startsWith("/uploads/")) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
     const indexPath = join(PUBLIC_DIR, "index.html");
     if (existsSync(indexPath)) {
       const html = readFileSync(indexPath, "utf-8");
