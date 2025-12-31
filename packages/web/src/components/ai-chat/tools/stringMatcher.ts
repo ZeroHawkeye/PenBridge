@@ -54,7 +54,7 @@ export function normalizeWhitespace(text: string): string {
       const match = line.match(/^(\s*)(.*?)(\s*)$/);
       if (!match) return line;
 
-      const [, leading, content, trailing] = match;
+      const [, leading, content] = match;
       // 保留前导空格，标准化中间内容的空白，移除尾随空格
       return leading + content.replace(/\s+/g, ' ');
     })

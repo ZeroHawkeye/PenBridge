@@ -3,7 +3,7 @@
  * 避免全文扫描，减少内存消耗
  */
 
-import Diff from 'diff';
+import * as Diff from 'diff';
 
 export interface DiffLine {
   type: 'added' | 'removed' | 'unchanged' | 'separator';
@@ -158,10 +158,6 @@ export function generateOptimizedDiff(
 
   // 计算变更区域的 diff（包含上下文）
   const contextStart = Math.max(0, startLine - contextLines);
-  const contextEnd = Math.min(
-    oldLines.length,
-    oldLines.length - endLine + contextLines
-  );
 
   const oldWithContext = oldLines.slice(contextStart, oldLines.length - endLine + contextLines);
   const newWithContext = newLines.slice(contextStart, newLines.length - endLine + contextLines);
