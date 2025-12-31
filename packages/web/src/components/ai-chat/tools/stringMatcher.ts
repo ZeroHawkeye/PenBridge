@@ -39,12 +39,21 @@ export function stripLineNumbers(text: string): string {
 
 /**
  * 标准化空白字符（保留换行符，但标准化空格和制表符）
+ * 注意：保留前导空格以避免破坏代码缩进
  */
 export function normalizeWhitespace(text: string): string {
-  // 将多个空格/制表符标准化为单个空格，但保留换行符
+  // 将行内的多个空格/制表符标准化为单个空格，但保留前导空格（缩进）
   return text
     .split('\n')
-    .map(line => line.replace(/\s+/g, ' ').trim())
+    .map(line => {
+      // 匹配前导空格 + 其余内容
+      const match = line.match(/^(\s*)(.*?)(\s*)$/);
+      if (!match) return line;
+
+      const [, leading, content, trailing] = match;
+      // 保留前导空格，标准化中间内容的空白，移除尾随空格
+      return leading + content.replace(/\s+/g, ' ');
+    })
     .join('\n')
     .replace(/\n{3,}/g, '\n\n'); // 多个连续换行符最多保留 2 个
 }
@@ -92,25 +101,36 @@ function findAllOccurrences(content: string, search: string): number[] {
 }
 
 /**
- * 计算两个字符串的相似度（简化的 Levenshtein 距离）
+ * 计算两个字符串的相似度
+ * 使用改进算法：结合位置匹配和字符集相似度
  */
 function calculateSimilarity(str1: string, str2: string): number {
   const maxLength = Math.max(str1.length, str2.length);
   if (maxLength === 0) return 1.0;
+  if (str1 === str2) return 1.0;
 
-  // 简化算法：计算字符级别的匹配度
+  // 1. 位置匹配度：逐字符比较（处理小的差异）
   const minLength = Math.min(str1.length, str2.length);
-  let matches = 0;
-
+  let positionMatches = 0;
   for (let i = 0; i < minLength; i++) {
-    if (str1[i] === str2[i]) matches++;
+    if (str1[i] === str2[i]) positionMatches++;
   }
+  const positionSimilarity = positionMatches / maxLength;
 
-  // 考虑长度差异的惩罚
-  const lengthPenalty = Math.abs(str1.length - str2.length) / maxLength;
-  const baseSimilarity = matches / maxLength;
+  // 2. 字符集相似度：计算包含的字符（处理顺序差异）
+  const chars1 = new Set(str1);
+  const chars2 = new Set(str2);
+  let commonChars = 0;
+  chars1.forEach(char => {
+    if (chars2.has(char)) commonChars++;
+  });
+  const charSetSimilarity = (commonChars * 2) / (chars1.size + chars2.size);
 
-  return baseSimilarity * (1 - lengthPenalty * 0.5);
+  // 3. 长度相似度
+  const lengthSimilarity = 1 - Math.abs(str1.length - str2.length) / maxLength;
+
+  // 综合评分：位置匹配最重要，字符集和长度作为辅助
+  return positionSimilarity * 0.6 + charSetSimilarity * 0.3 + lengthSimilarity * 0.1;
 }
 
 /**

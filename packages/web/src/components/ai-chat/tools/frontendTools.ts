@@ -233,8 +233,16 @@ export async function executeFrontendTool(
           const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
           const normalizedReplace = normalizeLineEndings(args.replace);
 
-          newContent = normalizedContent.replaceAll(normalizedSearch, normalizedReplace);
+          // 验证是否找到匹配
           occurrences = normalizedContent.split(normalizedSearch).length - 1;
+          if (occurrences === 0) {
+            return {
+              success: false,
+              error: `未找到匹配内容。可能的原因：\n- 搜索文本包含了行号前缀\n- 换行符不匹配\n- 内容不存在\n\n提示：使用不带 replaceAll 参数的 replace_content 可以获得智能匹配和详细错误信息。`,
+            };
+          }
+
+          newContent = normalizedContent.replaceAll(normalizedSearch, normalizedReplace);
           description = `替换所有 ${occurrences} 处匹配`;
         } else if (args.replaceAt !== undefined) {
           // 替换第 N 个匹配
@@ -244,10 +252,19 @@ export async function executeFrontendTool(
           const normalizedReplace = normalizeLineEndings(args.replace);
 
           const parts = normalizedContent.split(normalizedSearch);
-          if (n < 1 || n > parts.length - 1) {
+          const matchCount = parts.length - 1;
+
+          if (matchCount === 0) {
             return {
               success: false,
-              error: `replaceAt=${n} 超出范围（共找到 ${parts.length - 1} 个匹配）`,
+              error: `未找到匹配内容。可能的原因：\n- 搜索文本包含了行号前缀\n- 换行符不匹配\n- 内容不存在\n\n提示：使用不带 replaceAt 参数的 replace_content 可以获得智能匹配和详细错误信息。`,
+            };
+          }
+
+          if (n < 1 || n > matchCount) {
+            return {
+              success: false,
+              error: `replaceAt=${n} 超出范围（共找到 ${matchCount} 个匹配）`,
             };
           }
 
@@ -255,7 +272,7 @@ export async function executeFrontendTool(
           newContent = parts.slice(0, n).join(normalizedSearch) +
                       normalizedReplace +
                       parts.slice(n + 1).join(normalizedSearch);
-          description = `替换第 ${n}/${parts.length - 1} 处匹配`;
+          description = `替换第 ${n}/${matchCount} 处匹配`;
         } else if (args.replaceRange) {
           // 替换指定行范围内的匹配
           const { startLine, endLine } = args.replaceRange;
@@ -275,9 +292,18 @@ export async function executeFrontendTool(
           const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
           const normalizedReplace = normalizeLineEndings(args.replace);
           const rangeContent = rangeLines.join('\n');
+
+          // 验证是否找到匹配
+          occurrences = rangeContent.split(normalizedSearch).length - 1;
+          if (occurrences === 0) {
+            return {
+              success: false,
+              error: `在第 ${startLine}-${endLine} 行范围内未找到匹配内容。可能的原因：\n- 搜索文本包含了行号前缀\n- 换行符不匹配\n- 该行范围内不存在该内容\n\n提示：使用不带 replaceRange 参数的 replace_content 可以获得智能匹配和详细错误信息。`,
+            };
+          }
+
           const newRangeContent = rangeContent.replaceAll(normalizedSearch, normalizedReplace);
 
-          occurrences = rangeContent.split(normalizedSearch).length - 1;
           // 处理空字符串情况：空字符串 split('\n') 返回 ['']，会产生一个空行
           const newRangeLines = newRangeContent ? newRangeContent.split('\n') : [];
           newContent = [...beforeLines, ...newRangeLines, ...afterLines].join('\n');
@@ -288,7 +314,31 @@ export async function executeFrontendTool(
           const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
           const normalizedReplace = normalizeLineEndings(args.replace);
 
-          newContent = normalizedContent.replace(normalizedSearch, normalizedReplace);
+          // 根据匹配策略选择替换方法
+          if (matchResult.strategy === 'exact' || matchResult.strategy === 'normalized-lines') {
+            // 精确匹配或标准化行匹配，可以直接用 replace
+            newContent = normalizedContent.replace(normalizedSearch, normalizedReplace);
+          } else {
+            // 模糊匹配或空白字符标准化匹配，使用位置精确替换
+            // matchResult.position 是在原始content中的位置，需要在原始内容中替换
+            if (matchResult.position === undefined) {
+              return {
+                success: false,
+                error: `智能匹配策略 ${matchResult.strategy} 未返回位置信息`,
+              };
+            }
+
+            // 确定实际匹配的内容长度（模糊匹配时长度等于搜索文本）
+            const searchLength = normalizeLineEndings(args.search).length;
+
+            // 在原始内容中使用位置替换
+            const beforeMatch = context.content.substring(0, matchResult.position);
+            const afterMatch = context.content.substring(matchResult.position + searchLength);
+
+            // 组合并标准化换行符
+            newContent = normalizeLineEndings(beforeMatch + args.replace + afterMatch);
+          }
+
           description = `替换匹配的内容（${matchResult.strategy} 策略）`;
 
           if (matchResult.warnings.length > 0) {

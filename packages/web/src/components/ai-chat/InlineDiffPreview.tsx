@@ -68,6 +68,7 @@ export function InlineDiffPreview({
     });
   }, [pendingChange.oldValue, pendingChange.newValue, shouldSkipDiff, isExpanded]);
 
+  // generateOptimizedDiff 已经进行了过滤和优化，直接使用其结果
   const diffLines = diffResult?.lines ?? [];
   const changeStats = diffResult?.stats ?? {
     added: changeSummary.addedLines,
@@ -76,70 +77,6 @@ export function InlineDiffPreview({
     changedLines: changeSummary.addedLines + changeSummary.removedLines,
     totalChangedCharacters: Math.abs(changeSummary.addedChars) + changeSummary.removedChars,
   };
-
-  // 只显示有变化的行（和周围几行上下文），省略未变化的部分
-  const filteredLines = useMemo(() => {
-    const contextLines = 2; // 上下文行数
-    const changedIndices = new Set<number>();
-    
-    // 找出所有变更行的索引
-    diffLines.forEach((line, i) => {
-      if (line.type !== "unchanged") {
-        changedIndices.add(i);
-      }
-    });
-    
-    // 如果没有变更，返回空
-    if (changedIndices.size === 0) {
-      return [];
-    }
-    
-    // 计算需要显示的行索引
-    const visibleIndices = new Set<number>();
-    changedIndices.forEach(idx => {
-      for (let i = Math.max(0, idx - contextLines); i <= Math.min(diffLines.length - 1, idx + contextLines); i++) {
-        visibleIndices.add(i);
-      }
-    });
-    
-    // 构建结果，添加分隔符表示省略的内容
-    const result: DiffLine[] = [];
-    let lastIndex = -1;
-    
-    const sortedIndices = Array.from(visibleIndices).sort((a, b) => a - b);
-    
-    for (const i of sortedIndices) {
-      // 如果和上一个显示的行不连续，添加分隔符
-      if (lastIndex !== -1 && i - lastIndex > 1) {
-        const skippedLines = i - lastIndex - 1;
-        result.push({
-          type: "separator",
-          content: `... 省略 ${skippedLines} 行未变更内容 ...`,
-        });
-      }
-      result.push(diffLines[i]);
-      lastIndex = i;
-    }
-    
-    // 如果开头有省略的内容
-    if (sortedIndices.length > 0 && sortedIndices[0] > 0) {
-      result.unshift({
-        type: "separator",
-        content: `... 省略前 ${sortedIndices[0]} 行未变更内容 ...`,
-      });
-    }
-    
-    // 如果结尾有省略的内容
-    if (sortedIndices.length > 0 && sortedIndices[sortedIndices.length - 1] < diffLines.length - 1) {
-      const remaining = diffLines.length - 1 - sortedIndices[sortedIndices.length - 1];
-      result.push({
-        type: "separator",
-        content: `... 省略后 ${remaining} 行未变更内容 ...`,
-      });
-    }
-    
-    return result;
-  }, [diffLines]);
 
   // 处理接受
   const handleAccept = async () => {
@@ -204,14 +141,14 @@ export function InlineDiffPreview({
       {isExpanded && (
         <div className="max-h-[200px] overflow-auto">
           <div className="font-mono text-xs">
-            {filteredLines.length === 0 ? (
+            {diffLines.length === 0 ? (
               <div className="flex items-center justify-center h-16 text-muted-foreground">
                 没有检测到变更
               </div>
             ) : (
               <table className="w-full border-collapse">
                 <tbody>
-                  {filteredLines.map((line, index) => (
+                  {diffLines.map((line, index) => (
                     line.type === "separator" ? (
                       <tr key={index} className="bg-muted/50">
                         <td colSpan={2} className="px-3 py-1 text-center text-xs text-muted-foreground italic">
