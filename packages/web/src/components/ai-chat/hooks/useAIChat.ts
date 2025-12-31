@@ -4,7 +4,7 @@
  * 支持待确认变更的管理
  */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { trpc } from "@/utils/trpc";
 import { getApiBaseUrl } from "@/utils/serverConfig";
 import { getAuthToken } from "@/utils/auth";
@@ -37,7 +37,6 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<AIModelInfo | null>(null);
-  const [availableModels, setAvailableModels] = useState<AIModelInfo[]>([]);
   const [currentLoopCount, setCurrentLoopCount] = useState(0);
   
   // 待确认变更状态
@@ -71,60 +70,69 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   // 加载消息
   const { data: messagesData } = trpc.aiChat.getMessages.useQuery(
     { sessionId: session?.id || 0 },
-    { enabled: !!session?.id }
+    { 
+      enabled: !!session?.id,
+      // 保持之前的数据直到新数据加载完成，防止闪烁和数据丢失
+      keepPreviousData: true,
+      // 禁用在窗口聚焦时自动重新获取，避免意外覆盖本地状态
+      refetchOnWindowFocus: false,
+    }
   );
   
-  // 初始化可用模型列表
+  // 使用 useMemo 计算可用模型列表，避免每次渲染都创建新数组
+  const availableModels = useMemo(() => {
+    if (!providers || !models) return [];
+    return models
+      .filter((m: any) => m.enabled)
+      .map((m: any) => {
+        const provider = providers.find((p: any) => p.id === m.providerId);
+        return {
+          id: m.id,
+          modelId: m.modelId,
+          displayName: m.displayName,
+          providerId: m.providerId,
+          providerName: provider?.name || "未知供应商",
+          capabilities: m.capabilities,
+        };
+      });
+  }, [providers, models]);
+  
+  // 初始化选择的模型
   useEffect(() => {
-    if (providers && models) {
-      const modelList: AIModelInfo[] = models
-        .filter((m: any) => m.enabled)
-        .map((m: any) => {
-          const provider = providers.find((p: any) => p.id === m.providerId);
-          return {
-            id: m.id,
-            modelId: m.modelId,
-            displayName: m.displayName,
-            providerId: m.providerId,
-            providerName: provider?.name || "未知供应商",
-            capabilities: m.capabilities,
-          };
-        });
-      setAvailableModels(modelList);
-      
-      // 尝试从 localStorage 恢复用户之前选择的模型
-      if (!selectedModel) {
-        const savedModelStr = localStorage.getItem(SELECTED_MODEL_KEY);
-        if (savedModelStr) {
-          try {
-            const savedModel = JSON.parse(savedModelStr);
-            // 验证保存的模型是否仍然可用
-            const matchedModel = modelList.find(
-              (m: AIModelInfo) => m.modelId === savedModel.modelId && 
-                   m.providerId === savedModel.providerId
-            );
-            if (matchedModel) {
-              setSelectedModel(matchedModel);
-              return; // 已恢复用户选择的模型，不再使用默认模型
-            }
-          } catch {
-            // 解析失败，忽略保存的值
-          }
-        }
-        
-        // 如果没有保存的模型或保存的模型不可用，使用服务器默认模型
-        if (defaultModel) {
-          const defaultModelInfo = modelList.find(
-            (m: AIModelInfo) => m.modelId === defaultModel.model.modelId && 
-                 m.providerId === defaultModel.provider.id
+    if (availableModels.length === 0) return;
+    
+    // 尝试从 localStorage 恢复用户之前选择的模型
+    if (!selectedModel) {
+      const savedModelStr = localStorage.getItem(SELECTED_MODEL_KEY);
+      if (savedModelStr) {
+        try {
+          const savedModel = JSON.parse(savedModelStr);
+          // 验证保存的模型是否仍然可用
+          const matchedModel = availableModels.find(
+            (m: AIModelInfo) => m.modelId === savedModel.modelId && 
+                 m.providerId === savedModel.providerId
           );
-          if (defaultModelInfo) {
-            setSelectedModel(defaultModelInfo);
+          if (matchedModel) {
+            setSelectedModel(matchedModel);
+            return; // 已恢复用户选择的模型，不再使用默认模型
           }
+        } catch {
+          // 解析失败，忽略保存的值
+        }
+      }
+      
+      // 如果没有保存的模型或保存的模型不可用，使用服务器默认模型
+      if (defaultModel) {
+        const defaultModelInfo = availableModels.find(
+          (m: AIModelInfo) => m.modelId === defaultModel.model.modelId && 
+               m.providerId === defaultModel.provider.id
+        );
+        if (defaultModelInfo) {
+          setSelectedModel(defaultModelInfo);
         }
       }
     }
-  }, [providers, models, defaultModel, selectedModel]);
+  }, [availableModels, defaultModel, selectedModel]);
   
   // 保存用户选择的模型到 localStorage
   useEffect(() => {
@@ -136,35 +144,62 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
     }
   }, [selectedModel]);
   
+  // 追踪当前会话 ID，用于防止竞态条件
+  const currentSessionIdRef = useRef<number | null>(null);
+  
   // 加载会话消息
   useEffect(() => {
-    if (messagesData?.messages) {
-      setMessages(messagesData.messages.map((m: any) => ({
-        ...m,
-        status: m.status as ChatMessage["status"],
-        role: m.role as ChatMessage["role"],
-      })));
+    if (messagesData?.messages && session?.id) {
+      // 只有当消息数据对应当前会话时才更新
+      // 防止切换会话时的竞态条件导致消息被错误覆盖
+      if (currentSessionIdRef.current === session.id) {
+        setMessages(messagesData.messages.map((m: any) => ({
+          ...m,
+          status: m.status as ChatMessage["status"],
+          role: m.role as ChatMessage["role"],
+        })));
+      }
     }
-  }, [messagesData]);
+  }, [messagesData, session?.id]);
+  
+  // 追踪是否正在初始化会话，防止重复请求
+  const isInitializingSessionRef = useRef(false);
+  // 追踪已初始化的文章 ID，避免重复初始化同一文章的会话
+  const initializedArticleIdRef = useRef<number | null>(null);
   
   // 初始化或获取会话
+  // 会话是按文章关联的，同一文章只需初始化一次
   useEffect(() => {
     const initSession = async () => {
+      // 防止重复初始化
+      if (isInitializingSessionRef.current) return;
+      // 如果已经为当前文章初始化过会话，不需要重新获取
+      if (initializedArticleIdRef.current === articleId && session) return;
+      
       if (articleId && selectedModel) {
+        isInitializingSessionRef.current = true;
         try {
           const sess = await getOrCreateSessionMutation.mutateAsync({
             articleId,
             modelId: selectedModel.modelId,
             providerId: selectedModel.providerId,
           });
+          // 更新当前会话 ID 引用
+          currentSessionIdRef.current = sess.id;
+          initializedArticleIdRef.current = articleId;
           setSession(sess);
         } catch (err) {
           console.error("初始化会话失败:", err);
+        } finally {
+          isInitializingSessionRef.current = false;
         }
       }
     };
     
     initSession();
+  // 需要依赖 selectedModel 以便在模型加载后初始化会话
+  // 但通过 initializedArticleIdRef 防止重复初始化
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId, selectedModel?.id]);
   
   // 执行后端工具
@@ -223,6 +258,9 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
     
     if (loopCount >= maxLoopCount) {
       setError(`已达到最大循环次数 (${maxLoopCount})，任务可能过于复杂`);
+      // 重置加载状态，允许用户继续发送新消息
+      setIsLoading(false);
+      setIsStreaming(false);
       return;
     }
     

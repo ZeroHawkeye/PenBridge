@@ -13,6 +13,7 @@ import {
   PanelRight,
   Bot,
 } from "lucide-react";
+import { Drawer } from "antd";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -24,14 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import MilkdownEditor from "@/components/MilkdownEditor";
+import MilkdownEditor, { type MilkdownEditorRef } from "@/components/MilkdownEditor";
 import { TableOfContents, HeadingItem } from "@/components/TableOfContents";
 import { countWords, formatWordCountDetail } from "@/utils/wordCount";
 import { AIChatPanel } from "@/components/ai-chat/AIChatPanel";
@@ -235,6 +229,9 @@ export function ArticleEditorLayout({
   
   // 编辑器容器 ref，用于滚动到标题位置
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 编辑器实例 ref，用于直接更新内容而不重建编辑器
+  const milkdownEditorRef = useRef<MilkdownEditorRef>(null);
 
   // 处理标题点击，滚动到对应位置
   const handleHeadingClick = useCallback((heading: HeadingItem) => {
@@ -294,12 +291,76 @@ export function ArticleEditorLayout({
   
   // 编辑器刷新回调（用于 AI 修改内容后强制刷新编辑器）
   const [refreshKey, setRefreshKey] = useState(0);
+  // 保存滚动位置，用于刷新编辑器后恢复
+  const savedScrollTopRef = useRef<number | null>(null);
+  
   const handleEditorRefresh = useCallback(() => {
+    // 刷新前保存滚动位置
+    const container = editorContainerRef.current;
+    if (container) {
+      savedScrollTopRef.current = container.scrollTop;
+    }
     setRefreshKey(prev => prev + 1);
   }, []);
   
+  // 当 refreshKey 变化后恢复滚动位置
+  useEffect(() => {
+    if (savedScrollTopRef.current !== null) {
+      const container = editorContainerRef.current;
+      if (!container) return;
+      
+      const scrollTop = savedScrollTopRef.current;
+      savedScrollTopRef.current = null;
+      
+      // Milkdown 编辑器初始化是异步的：
+      // 1. 使用 requestAnimationFrame 延迟初始化
+      // 2. 然后 crepe.create() 返回 Promise
+      // 因此需要监听 DOM 变化，等待编辑器完全渲染后再恢复滚动
+      const observer = new MutationObserver((_mutations, obs) => {
+        // 检查 Milkdown 编辑器是否已渲染（查找编辑器特有的元素）
+        const editor = container.querySelector('.milkdown');
+        if (editor) {
+          obs.disconnect();
+          requestAnimationFrame(() => {
+            container.scrollTop = scrollTop;
+          });
+        }
+      });
+      
+      observer.observe(container, { childList: true, subtree: true });
+      
+      // 超时保护：500ms 后仍未检测到编辑器，强制恢复滚动
+      const timeout = setTimeout(() => {
+        observer.disconnect();
+        container.scrollTop = scrollTop;
+      }, 500);
+      
+      return () => {
+        observer.disconnect();
+        clearTimeout(timeout);
+      };
+    }
+  }, [refreshKey]);
+  
   // 合并外部 editorKey 和内部 refreshKey
   const finalEditorKey = (editorKey ?? 0) + refreshKey;
+  
+  // 直接设置编辑器内容的方法（不重建编辑器，保持滚动位置）
+  const setEditorContent = useCallback((markdown: string): boolean => {
+    const editor = milkdownEditorRef.current;
+    if (editor) {
+      const success = editor.setContent(markdown);
+      if (success) {
+        // 同步状态到父组件
+        onContentChange(markdown);
+        return true;
+      }
+    }
+    // 如果 setContent 失败，回退到重建编辑器的方式
+    onContentChange(markdown);
+    handleEditorRefresh();
+    return false;
+  }, [onContentChange, handleEditorRefresh]);
   
   // AI 工具上下文
   const toolContext = useMemo(() => ({
@@ -309,7 +370,23 @@ export function ArticleEditorLayout({
     onTitleChange,
     onContentChange,
     onEditorRefresh: handleEditorRefresh,
-  }), [title, content, articleId, onTitleChange, onContentChange, handleEditorRefresh]);
+    setEditorContent,  // 新增：直接设置编辑器内容
+  }), [title, content, articleId, onTitleChange, onContentChange, handleEditorRefresh, setEditorContent]);
+
+  // AI 面板文章上下文 - 避免每次渲染创建新对象
+  const articleContext = useMemo(() => 
+    articleId ? {
+      articleId,
+      title,
+      content,
+      contentLength: content.length,
+    } : undefined
+  , [articleId, title, content]);
+
+  // AI 面板关闭回调 - 避免每次渲染创建新函数
+  const handleCloseAIPanel = useCallback(() => {
+    setIsAIPanelOpen(false);
+  }, []);
 
   // 拖拽调整目录宽度
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -358,7 +435,7 @@ export function ArticleEditorLayout({
   }, [showToc, tocWidth, isAIPanelOpen, aiPanelWidth]);
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background relative">
       {/* 顶部工具栏 - 简洁风格 */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
         <div className="flex items-center gap-2">
@@ -410,111 +487,119 @@ export function ArticleEditorLayout({
           </TooltipProvider>
 
           {/* 设置按钮 - 放在最右侧 */}
-          <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="w-[300px] p-0 border-l top-8 h-[calc(100%-32px)]">
-              <div className="flex flex-col h-full">
-                {/* 标题头部 */}
-                <SheetHeader className="px-4 py-3 border-b">
-                  <SheetTitle className="text-sm font-medium">页面设置</SheetTitle>
-                </SheetHeader>
-
-                {/* 设置内容 - Notion 风格 */}
-                <ScrollArea className="flex-1">
-                  <div className="px-4 py-3 space-y-1">
-                    {/* 自适应宽度 */}
-                    <SettingItem
-                      icon={<Maximize2 className="h-4 w-4" />}
-                      label="自适应宽度"
-                      action={
-                        <Switch
-                          checked={isFullWidth}
-                          onCheckedChange={setIsFullWidth}
-                          className="scale-90"
-                        />
-                      }
-                    />
-
-                    {/* 小字体 */}
-                    <SettingItem
-                      icon={<Type className="h-4 w-4" />}
-                      label="小字体"
-                      action={
-                        <Switch
-                          checked={isSmallFont}
-                          onCheckedChange={setIsSmallFont}
-                          className="scale-90"
-                        />
-                      }
-                    />
-
-                    {/* 标题目录 */}
-                    <SettingItem
-                      icon={<List className="h-4 w-4" />}
-                      label="标题目录"
-                      action={
-                        <Switch
-                          checked={showToc}
-                          onCheckedChange={setShowToc}
-                          className="scale-90"
-                        />
-                      }
-                    />
-
-                    {/* 标题自动编号 */}
-                    <SettingItem
-                      icon={<Hash className="h-4 w-4" />}
-                      label="标题自动编号"
-                      action={
-                        <Switch
-                          checked={autoHeadingNumber}
-                          onCheckedChange={setAutoHeadingNumber}
-                          className="scale-90"
-                        />
-                      }
-                    />
-
-                    {/* 分隔线 */}
-                    <div className="my-2 border-t" />
-
-                    {/* 额外设置内容（如导入 Word） */}
-                    {settingsContent}
-
-                    {/* 分隔线 */}
-                    <div className="my-2 border-t" />
-
-                    {/* 统计信息区域 */}
-                    <div className="py-2">
-                      <div className="flex items-center gap-3 mb-2 px-2 -mx-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">统计信息</span>
-                      </div>
-                      <div className="ml-7 space-y-1.5 text-sm text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>总字数:</span>
-                          <span className="text-foreground">{totalWords}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>段落数:</span>
-                          <span className="text-foreground">{wordCount.paragraphs}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>行数:</span>
-                          <span className="text-foreground">{wordCount.lines}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </ScrollArea>
-              </div>
-            </SheetContent>
-          </Sheet>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
+      
+      {/* 设置抽屉 - 放在最外层，使用 antd Drawer 避免 Portal 影响编辑器 */}
+      <Drawer
+        title="页面设置"
+        placement="right"
+        width={300}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        className="settings-drawer"
+        mask={false}
+        styles={{
+          header: { padding: '12px 16px', borderBottom: '1px solid var(--border)' },
+          body: { padding: 0 },
+        }}
+        getContainer={false}
+      >
+        <ScrollArea className="h-full">
+          <div className="px-4 py-3 space-y-1">
+            {/* 自适应宽度 */}
+            <SettingItem
+              icon={<Maximize2 className="h-4 w-4" />}
+              label="自适应宽度"
+              action={
+                <Switch
+                  checked={isFullWidth}
+                  onCheckedChange={setIsFullWidth}
+                  className="scale-90"
+                />
+              }
+            />
+
+            {/* 小字体 */}
+            <SettingItem
+              icon={<Type className="h-4 w-4" />}
+              label="小字体"
+              action={
+                <Switch
+                  checked={isSmallFont}
+                  onCheckedChange={setIsSmallFont}
+                  className="scale-90"
+                />
+              }
+            />
+
+            {/* 标题目录 */}
+            <SettingItem
+              icon={<List className="h-4 w-4" />}
+              label="标题目录"
+              action={
+                <Switch
+                  checked={showToc}
+                  onCheckedChange={setShowToc}
+                  className="scale-90"
+                />
+              }
+            />
+
+            {/* 标题自动编号 */}
+            <SettingItem
+              icon={<Hash className="h-4 w-4" />}
+              label="标题自动编号"
+              action={
+                <Switch
+                  checked={autoHeadingNumber}
+                  onCheckedChange={setAutoHeadingNumber}
+                  className="scale-90"
+                />
+              }
+            />
+
+            {/* 分隔线 */}
+            <div className="my-2 border-t" />
+
+            {/* 额外设置内容（如导入 Word） */}
+            {settingsContent}
+
+            {/* 分隔线 */}
+            <div className="my-2 border-t" />
+
+            {/* 统计信息区域 */}
+            <div className="py-2">
+              <div className="flex items-center gap-3 mb-2 px-2 -mx-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">统计信息</span>
+              </div>
+              <div className="ml-7 space-y-1.5 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>总字数:</span>
+                  <span className="text-foreground">{totalWords}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>段落数:</span>
+                  <span className="text-foreground">{wordCount.paragraphs}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>行数:</span>
+                  <span className="text-foreground">{wordCount.lines}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+      </Drawer>
 
       {/* 主编辑区域 - 全屏沉浸式 */}
       <div className="flex-1 flex overflow-hidden">
@@ -544,6 +629,7 @@ export function ArticleEditorLayout({
               <EditorSkeleton />
             ) : (
               <MilkdownEditor
+                ref={milkdownEditorRef}
                 key={finalEditorKey}
                 value={content}
                 onChange={onContentChange}
@@ -625,13 +711,8 @@ export function ArticleEditorLayout({
         {isAIPanelOpen && (
           <AIChatPanel
             isOpen={isAIPanelOpen}
-            onClose={() => setIsAIPanelOpen(false)}
-            articleContext={articleId ? {
-              articleId,
-              title,
-              content,
-              contentLength: content.length,
-            } : undefined}
+            onClose={handleCloseAIPanel}
+            articleContext={articleContext}
             toolContext={toolContext}
             width={aiPanelWidth}
             onWidthChange={setAIPanelWidth}
@@ -639,14 +720,15 @@ export function ArticleEditorLayout({
         )}
 
         {/* 目录折叠状态下的展开按钮 */}
-        {!showToc && !isAIPanelOpen && (
+        {!showToc && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="fixed right-4 top-1/2 -translate-y-1/2 h-8 w-8 bg-muted/80 backdrop-blur-sm shadow-sm border"
+                  className="fixed top-1/3 h-8 w-8 bg-muted/80 backdrop-blur-sm shadow-sm border"
+                  style={{ right: isAIPanelOpen ? aiPanelWidth + 16 : 16 }}
                   onClick={() => setShowToc(true)}
                 >
                   <PanelRight className="h-4 w-4" />

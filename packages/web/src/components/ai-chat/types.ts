@@ -89,8 +89,10 @@ export interface FrontendToolContext {
   articleId?: number;
   onTitleChange: (title: string) => void;
   onContentChange: (content: string) => void;
-  // 可选：通知编辑器需要刷新（用于外部修改内容后同步到编辑器）
+  // 可选：通知编辑器需要刷新（用于外部修改内容后同步到编辑器）- 会重建编辑器
   onEditorRefresh?: () => void;
+  // 直接设置编辑器内容（不重建编辑器，保持滚动位置）
+  setEditorContent?: (markdown: string) => boolean;
 }
 
 // AI 模型信息

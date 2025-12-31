@@ -41,40 +41,31 @@ export const frontendToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "read_article",
-      description: "读取当前正在编辑的文章内容。可以选择读取标题、正文或全部内容。",
+      description: `读取当前正在编辑的文章内容。支持多种读取模式：
+1. 读取标题：section="title"
+2. 读取全文：section="all" 或 section="content"（不指定行范围时）
+3. 按行读取：指定 startLine 和 endLine 参数，读取指定行范围的内容
+
+返回结果会包含行号信息，格式为 "行号 | 内容"，便于定位和后续编辑。
+对于长文章，建议分段读取以避免超出上下文限制。`,
       parameters: {
         type: "object",
         properties: {
           section: {
             type: "string",
-            description: "要读取的部分",
+            description: "要读取的部分：title（仅标题）、content（仅正文）、all（标题+正文）",
             enum: ["title", "content", "all"],
+            default: "all",
+          },
+          startLine: {
+            type: "number",
+            description: "起始行号（从 1 开始，包含）。指定后将按行读取内容。",
+          },
+          endLine: {
+            type: "number",
+            description: "结束行号（包含）。如果不指定，默认读取从 startLine 开始的 200 行。",
           },
         },
-        required: ["section"],
-      },
-    },
-    executionLocation: "frontend",
-  },
-  {
-    type: "function",
-    function: {
-      name: "read_article_chunk",
-      description: "分段读取长文章，避免超出 token 限制。适用于处理大型文章。",
-      parameters: {
-        type: "object",
-        properties: {
-          chunkIndex: {
-            type: "number",
-            description: "段落索引（从 0 开始）",
-          },
-          chunkSize: {
-            type: "number",
-            description: "每段字数",
-            default: 2000,
-          },
-        },
-        required: ["chunkIndex"],
       },
     },
     executionLocation: "frontend",

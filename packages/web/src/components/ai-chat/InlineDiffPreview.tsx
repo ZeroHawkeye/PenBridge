@@ -29,7 +29,7 @@ interface InlineDiffPreviewProps {
 
 // Diff 行类型
 interface DiffLine {
-  type: "added" | "removed" | "unchanged";
+  type: "added" | "removed" | "unchanged" | "separator";
   content: string;
   oldLineNum?: number;
   newLineNum?: number;
@@ -114,10 +114,9 @@ export function InlineDiffPreview({
     return countChanges(diffLines);
   }, [diffLines]);
 
-  // 只显示有变化的行（和周围几行上下文）
+  // 只显示有变化的行（和周围几行上下文），省略未变化的部分
   const filteredLines = useMemo(() => {
     const contextLines = 2; // 上下文行数
-    const result: DiffLine[] = [];
     const changedIndices = new Set<number>();
     
     // 找出所有变更行的索引
@@ -127,19 +126,53 @@ export function InlineDiffPreview({
       }
     });
     
-    // 添加上下文行
-    diffLines.forEach((line, i) => {
-      const hasNearbyChange = Array.from(changedIndices).some(
-        idx => Math.abs(idx - i) <= contextLines
-      );
-      if (hasNearbyChange || line.type !== "unchanged") {
-        result.push(line);
+    // 如果没有变更，返回空
+    if (changedIndices.size === 0) {
+      return [];
+    }
+    
+    // 计算需要显示的行索引
+    const visibleIndices = new Set<number>();
+    changedIndices.forEach(idx => {
+      for (let i = Math.max(0, idx - contextLines); i <= Math.min(diffLines.length - 1, idx + contextLines); i++) {
+        visibleIndices.add(i);
       }
     });
     
-    // 如果内容太少，显示全部
-    if (result.length < 10 || diffLines.length < 30) {
-      return diffLines;
+    // 构建结果，添加分隔符表示省略的内容
+    const result: DiffLine[] = [];
+    let lastIndex = -1;
+    
+    const sortedIndices = Array.from(visibleIndices).sort((a, b) => a - b);
+    
+    for (const i of sortedIndices) {
+      // 如果和上一个显示的行不连续，添加分隔符
+      if (lastIndex !== -1 && i - lastIndex > 1) {
+        const skippedLines = i - lastIndex - 1;
+        result.push({
+          type: "separator",
+          content: `... 省略 ${skippedLines} 行未变更内容 ...`,
+        });
+      }
+      result.push(diffLines[i]);
+      lastIndex = i;
+    }
+    
+    // 如果开头有省略的内容
+    if (sortedIndices.length > 0 && sortedIndices[0] > 0) {
+      result.unshift({
+        type: "separator",
+        content: `... 省略前 ${sortedIndices[0]} 行未变更内容 ...`,
+      });
+    }
+    
+    // 如果结尾有省略的内容
+    if (sortedIndices.length > 0 && sortedIndices[sortedIndices.length - 1] < diffLines.length - 1) {
+      const remaining = diffLines.length - 1 - sortedIndices[sortedIndices.length - 1];
+      result.push({
+        type: "separator",
+        content: `... 省略后 ${remaining} 行未变更内容 ...`,
+      });
     }
     
     return result;
@@ -216,33 +249,41 @@ export function InlineDiffPreview({
               <table className="w-full border-collapse">
                 <tbody>
                   {filteredLines.map((line, index) => (
-                    <tr
-                      key={index}
-                      className={cn(
-                        line.type === "added" && "bg-green-100/70 dark:bg-green-950/40",
-                        line.type === "removed" && "bg-red-100/70 dark:bg-red-950/40"
-                      )}
-                    >
-                      {/* 变更标记 */}
-                      <td className="w-5 px-1 py-0.5 text-center select-none">
-                        {line.type === "added" && (
-                          <span className="text-green-600 dark:text-green-400 font-bold">+</span>
-                        )}
-                        {line.type === "removed" && (
-                          <span className="text-red-600 dark:text-red-400 font-bold">-</span>
-                        )}
-                      </td>
-                      {/* 内容 */}
-                      <td
+                    line.type === "separator" ? (
+                      <tr key={index} className="bg-muted/50">
+                        <td colSpan={2} className="px-3 py-1 text-center text-xs text-muted-foreground italic">
+                          {line.content}
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr
+                        key={index}
                         className={cn(
-                          "px-2 py-0.5 whitespace-pre-wrap break-all",
-                          line.type === "added" && "text-green-800 dark:text-green-200",
-                          line.type === "removed" && "text-red-800 dark:text-red-200 line-through opacity-75"
+                          line.type === "added" && "bg-green-100/70 dark:bg-green-950/40",
+                          line.type === "removed" && "bg-red-100/70 dark:bg-red-950/40"
                         )}
                       >
-                        {line.content || " "}
-                      </td>
-                    </tr>
+                        {/* 变更标记 */}
+                        <td className="w-5 px-1 py-0.5 text-center select-none">
+                          {line.type === "added" && (
+                            <span className="text-green-600 dark:text-green-400 font-bold">+</span>
+                          )}
+                          {line.type === "removed" && (
+                            <span className="text-red-600 dark:text-red-400 font-bold">-</span>
+                          )}
+                        </td>
+                        {/* 内容 */}
+                        <td
+                          className={cn(
+                            "px-2 py-0.5 whitespace-pre-wrap break-all",
+                            line.type === "added" && "text-green-800 dark:text-green-200",
+                            line.type === "removed" && "text-red-800 dark:text-red-200 line-through opacity-75"
+                          )}
+                        >
+                          {line.content || " "}
+                        </td>
+                      </tr>
+                    )
                   ))}
                 </tbody>
               </table>

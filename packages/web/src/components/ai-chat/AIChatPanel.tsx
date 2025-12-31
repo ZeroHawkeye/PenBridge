@@ -17,13 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select as AntdSelect } from "antd";
 import {
   Tooltip,
   TooltipContent,
@@ -36,10 +30,58 @@ import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolCallBlock } from "./ToolCallBlock";
 import type { AIChatPanelProps, ChatMessage, PendingChange } from "./types";
 
-// 最小和最大宽度
-const MIN_WIDTH = 320;
-const MAX_WIDTH = 600;
+// 最小宽度（最大宽度不限制，可自由拖拽）
+const MIN_WIDTH = 280;
 const DEFAULT_WIDTH = 380;
+
+// 模型选择器组件 - 使用 antd Select 避免 Portal 导致的图片重新请求问题
+interface ModelSelectorProps {
+  selectedModel: { providerId: number; modelId: string } | null;
+  availableModels: Array<{
+    providerId: number;
+    modelId: string;
+    displayName: string;
+    providerName: string;
+  }>;
+  onModelChange: (modelId: string) => void;
+}
+
+function ModelSelector({
+  selectedModel,
+  availableModels,
+  onModelChange,
+}: ModelSelectorProps) {
+  const currentValue = selectedModel 
+    ? `${selectedModel.providerId}_${selectedModel.modelId}` 
+    : undefined;
+  
+  const options = availableModels.map(model => ({
+    value: `${model.providerId}_${model.modelId}`,
+    label: (
+      <span className="text-xs">
+        {model.displayName}
+        <span className="text-muted-foreground ml-2">
+          ({model.providerName})
+        </span>
+      </span>
+    ),
+  }));
+  
+  return (
+    <div className="px-4 py-2 border-b shrink-0">
+      <AntdSelect
+        value={currentValue}
+        onChange={onModelChange}
+        options={options}
+        placeholder="选择模型"
+        className="w-full ai-model-select"
+        size="small"
+        popupClassName="ai-model-select-popup"
+        getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
+      />
+    </div>
+  );
+}
 
 // AI 正在思考/工作的 Loading 状态组件
 function AILoadingIndicator({ message }: { message?: string }) {
@@ -69,6 +111,7 @@ function AILoadingIndicator({ message }: { message?: string }) {
 }
 
 // 单条消息组件 - Cline 风格
+// 使用 memo 避免不必要的重新渲染（特别是 ReactMarkdown 渲染会触发图片请求）
 interface MessageItemProps {
   message: ChatMessage;
   pendingChanges?: PendingChange[];
@@ -312,7 +355,9 @@ export function AIChatPanel({
       if (!isResizing.current) return;
       
       const deltaX = startX - e.clientX;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + deltaX));
+      // 最大宽度为窗口宽度的 80%，确保不会完全覆盖编辑器
+      const maxWidth = Math.floor(window.innerWidth * 0.8);
+      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, startWidth + deltaX));
       
       if (onWidthChange) {
         onWidthChange(newWidth);
@@ -350,13 +395,16 @@ export function AIChatPanel({
     }
   }, [handleSend]);
   
-  // 模型选择
+  // 模型选择 - 使用 ref 存储最新的 availableModels 以避免依赖变化导致的重新渲染
+  const availableModelsRef = useRef(availableModels);
+  availableModelsRef.current = availableModels;
+  
   const handleModelChange = useCallback((modelId: string) => {
-    const model = availableModels.find(m => `${m.providerId}_${m.modelId}` === modelId);
+    const model = availableModelsRef.current.find(m => `${m.providerId}_${m.modelId}` === modelId);
     if (model) {
       setSelectedModel(model);
     }
-  }, [availableModels, setSelectedModel]);
+  }, [setSelectedModel]);
   
   if (!isOpen) return null;
   
@@ -419,31 +467,12 @@ export function AIChatPanel({
         </div>
       </div>
         
-        {/* 模型选择 */}
-        <div className="px-4 py-2 border-b shrink-0">
-          <Select
-            value={selectedModel ? `${selectedModel.providerId}_${selectedModel.modelId}` : ""}
-            onValueChange={handleModelChange}
-          >
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="选择模型" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableModels.map(model => (
-                <SelectItem 
-                  key={`${model.providerId}_${model.modelId}`}
-                  value={`${model.providerId}_${model.modelId}`}
-                  className="text-xs"
-                >
-                  <span>{model.displayName}</span>
-                  <span className="text-muted-foreground ml-2">
-                    ({model.providerName})
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* 模型选择 - 使用 antd Select 避免 Portal 影响编辑器 */}
+        <ModelSelector
+          selectedModel={selectedModel}
+          availableModels={availableModels}
+          onModelChange={handleModelChange}
+        />
         
         {/* 消息列表 */}
         <div className="flex-1 min-h-0 relative">
@@ -495,9 +524,9 @@ export function AIChatPanel({
                     return null;
                   }
                   
-                  // 如果工具已完成，说明在等待 AI 继续回复
+                  // 如果工具已完成，说明 AI 正在继续回复
                   const loadingMessage = hasCompletedTools 
-                    ? "AI 正在处理工具结果..." 
+                    ? "AI 正在继续回复..." 
                     : "AI 正在思考...";
                   return <AILoadingIndicator message={loadingMessage} />;
                 })()}

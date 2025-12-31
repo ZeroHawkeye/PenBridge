@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { editorViewCtx } from "@milkdown/kit/core";
+import { editorViewCtx, parserCtx } from "@milkdown/kit/core";
 import { getServerBaseUrlSync } from "../utils/serverConfig";
 import { createSpellCheckPlugin } from "./SpellCheckPlugin";
 import { isSpellCheckEnabled, SPELL_CHECK_CHANGED_EVENT } from "../utils/spellCheck";
@@ -168,7 +168,13 @@ interface MilkdownEditorProps {
   enableSpellCheck?: boolean; // 是否启用拼写检查
 }
 
-export function MilkdownEditor({
+// 暴露给父组件的方法
+export interface MilkdownEditorRef {
+  // 直接设置编辑器内容（不重建编辑器，保持滚动位置）
+  setContent: (markdown: string) => boolean;
+}
+
+function MilkdownEditorInner({
   value,
   onChange,
   placeholder = "开始写作...",
@@ -176,7 +182,7 @@ export function MilkdownEditor({
   className = "",
   articleId,
   enableSpellCheck,
-}: MilkdownEditorProps) {
+}: MilkdownEditorProps, ref: React.ForwardedRef<MilkdownEditorRef>) {
   // 如果没有显式传入 enableSpellCheck，则从设置中读取，并监听变更
   const [spellCheckState, setSpellCheckState] = useState(() => isSpellCheckEnabled());
   const shouldEnableSpellCheck = enableSpellCheck ?? spellCheckState;
@@ -201,6 +207,47 @@ export function MilkdownEditor({
   const isMountedRef = useRef(true);
   // 用于跟踪编辑器是否已成功创建
   const isCreatedRef = useRef(false);
+
+  // 暴露 setContent 方法给父组件
+  useImperativeHandle(ref, () => ({
+    setContent: (markdown: string): boolean => {
+      const crepe = crepeRef.current;
+      if (!crepe || !isCreatedRef.current) {
+        console.warn("[MilkdownEditor] setContent: 编辑器未就绪");
+        return false;
+      }
+      
+      try {
+        // 通过 Milkdown API 直接更新内容
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const parser = ctx.get(parserCtx);
+          
+          // 将 markdown 解析为 ProseMirror 文档
+          const newDoc = parser(markdown);
+          if (!newDoc) {
+            console.warn("[MilkdownEditor] setContent: 解析 markdown 失败");
+            return;
+          }
+          
+          // 创建替换整个文档的 transaction
+          const { state } = view;
+          const tr = state.tr.replaceWith(0, state.doc.content.size, newDoc.content);
+          
+          // 应用 transaction
+          view.dispatch(tr);
+          
+          // 更新 lastValueRef，避免触发 onChange
+          lastValueRef.current = markdown;
+        });
+        
+        return true;
+      } catch (error) {
+        console.error("[MilkdownEditor] setContent 失败:", error);
+        return false;
+      }
+    },
+  }), []);
 
   // 初始化编辑器
   useEffect(() => {
@@ -485,4 +532,9 @@ createPromise = crepe.create().then(() => {
   );
 }
 
-export default MilkdownEditor;
+// 使用 forwardRef 暴露 setContent 方法
+export const MilkdownEditor = forwardRef(MilkdownEditorInner);
+
+// 使用 memo 包装，避免父组件重新渲染时不必要的编辑器重新渲染
+// 由于编辑器内部管理自己的状态，只有 key 或 articleId 变化时才需要重新创建编辑器实例
+export default memo(MilkdownEditor);

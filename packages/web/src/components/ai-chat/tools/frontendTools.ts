@@ -49,40 +49,76 @@ export async function executeFrontendTool(
     switch (toolName) {
       case "read_article": {
         const section = args.section || "all";
+        const startLine = args.startLine as number | undefined;
+        const endLine = args.endLine as number | undefined;
+        
+        // 将内容按行分割
+        const lines = context.content.split('\n');
+        const totalLines = lines.length;
+        
+        // 如果指定了行范围，按行读取
+        if (startLine !== undefined) {
+          const start = Math.max(1, startLine);
+          const end = endLine !== undefined 
+            ? Math.min(totalLines, endLine) 
+            : Math.min(totalLines, start + 199); // 默认读取 200 行
+          
+          // 提取指定行范围的内容（带行号）
+          const selectedLines: string[] = [];
+          for (let i = start - 1; i < end && i < totalLines; i++) {
+            // 格式化行号，保持对齐
+            const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
+            selectedLines.push(`${lineNum} | ${lines[i]}`);
+          }
+          
+          return {
+            success: true,
+            result: {
+              content: selectedLines.join('\n'),
+              startLine: start,
+              endLine: Math.min(end, totalLines),
+              totalLines,
+              hasMoreBefore: start > 1,
+              hasMoreAfter: end < totalLines,
+              ...(section === "all" || section === "title" ? { title: context.title } : {}),
+            }
+          };
+        }
+        
+        // 不指定行范围时的传统模式
         switch (section) {
           case "title":
             return { success: true, result: { title: context.title } };
-          case "content":
-            return { success: true, result: { content: context.content } };
-          default:
+          case "content": {
+            // 为完整内容也添加行号
+            const numberedLines = lines.map((line, i) => {
+              const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
+              return `${lineNum} | ${line}`;
+            });
+            return { 
+              success: true, 
+              result: { 
+                content: numberedLines.join('\n'),
+                totalLines,
+              } 
+            };
+          }
+          default: {
+            // all: 返回标题和带行号的内容
+            const numberedLines = lines.map((line, i) => {
+              const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
+              return `${lineNum} | ${line}`;
+            });
             return {
               success: true,
               result: {
                 title: context.title,
-                content: context.content,
-                contentLength: context.content.length,
+                content: numberedLines.join('\n'),
+                totalLines,
               }
             };
+          }
         }
-      }
-
-      case "read_article_chunk": {
-        const chunkSize = args.chunkSize || 2000;
-        const chunkIndex = args.chunkIndex || 0;
-        const start = chunkIndex * chunkSize;
-        const chunk = context.content.slice(start, start + chunkSize);
-        const totalChunks = Math.ceil(context.content.length / chunkSize);
-
-        return {
-          success: true,
-          result: {
-            chunk,
-            chunkIndex,
-            totalChunks,
-            hasMore: chunkIndex < totalChunks - 1,
-            chunkLength: chunk.length,
-          },
-        };
       }
 
       case "update_title": {
@@ -227,9 +263,14 @@ export function applyPendingChange(
     if (change.type === "title") {
       context.onTitleChange(change.newValue);
     } else {
-      context.onContentChange(change.newValue);
-      // 内容变更后需要刷新编辑器（因为 Milkdown 不会自动响应外部 value 变化）
-      context.onEditorRefresh?.();
+      // 优先使用 setEditorContent 直接更新编辑器内容（不重建编辑器，保持滚动位置）
+      if (context.setEditorContent) {
+        context.setEditorContent(change.newValue);
+      } else {
+        // 回退：更新状态并刷新编辑器
+        context.onContentChange(change.newValue);
+        context.onEditorRefresh?.();
+      }
     }
     return { success: true };
   } catch (error) {
@@ -246,7 +287,6 @@ export function applyPendingChange(
 export function isFrontendTool(toolName: string): boolean {
   const frontendTools = [
     "read_article",
-    "read_article_chunk",
     "update_title",
     "insert_content",
     "replace_content",

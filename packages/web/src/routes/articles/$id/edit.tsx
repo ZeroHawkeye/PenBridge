@@ -46,6 +46,16 @@ function EditArticlePage() {
   const savedStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 标题输入框 ref
   const titleInputRef = useRef<HTMLInputElement>(null);
+  
+  // 使用 ref 存储最新值，避免回调函数依赖变化导致不必要的重渲染
+  const titleRef = useRef(title);
+  const contentRef = useRef(content);
+  const summaryRef = useRef(summary);
+  
+  // 同步更新 ref
+  useEffect(() => { titleRef.current = title; }, [title]);
+  useEffect(() => { contentRef.current = content; }, [content]);
+  useEffect(() => { summaryRef.current = summary; }, [summary]);
 
   // 第一步：快速加载文章元数据（不含 content，响应速度快）
   const { data: articleMeta, isLoading } = trpc.article.getMeta.useQuery({
@@ -88,6 +98,8 @@ function EditArticlePage() {
   // 执行保存的函数
   const doSave = useCallback(
     async (titleToSave: string, contentToSave: string, summaryToSave: string) => {
+      // 如果标题为空，使用默认标题（后端要求 title 至少 1 个字符）
+      const finalTitle = titleToSave?.trim() || "无标题";
       // 如果内容为空，使用占位符（后端要求 content 至少 1 个字符）
       let finalContent = contentToSave?.trim() ? contentToSave : " ";
       
@@ -104,7 +116,7 @@ function EditArticlePage() {
       try {
         await updateMutation.mutateAsync({
           id: Number(id),
-          title: titleToSave,
+          title: finalTitle,
           content: finalContent,
           summary: summaryToSave || undefined,
           scheduledAt: scheduledAt?.toISOString(),
@@ -115,6 +127,36 @@ function EditArticlePage() {
     },
     [id, scheduledAt, updateMutation]
   );
+
+  // 手动保存函数（Ctrl+S 和保存按钮使用）
+  const manualSave = useCallback(async () => {
+    // 取消正在进行的防抖保存，避免冲突
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    // 立即执行保存
+    await doSave(title, content, summary);
+  }, [doSave, title, content, summary]);
+
+  // Ctrl+S 快捷键保存
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault(); // 阻止浏览器默认保存行为
+        // 初始加载时不触发保存
+        if (isInitialLoadRef.current) {
+          return;
+        }
+        manualSave();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [manualSave]);
 
   // 防抖保存函数
   const debouncedSave = useCallback(
@@ -147,6 +189,8 @@ function EditArticlePage() {
   const hasLoadedRef = useRef(false);
   const loadedArticleIdRef = useRef<number | null>(null);
   const contentLoadedRef = useRef(false);
+  // 用于跟踪是否已聚焦过标题（新建文章时）
+  const hasFocusedTitleRef = useRef(false);
 
   // 元数据加载完成后立即更新（不包含 content）
   useEffect(() => {
@@ -192,9 +236,10 @@ function EditArticlePage() {
     }
   }, [articleContent, articleMeta]);
 
-  // 新建文章时聚焦标题并全选
+  // 新建文章时聚焦标题并全选（只在首次加载时执行一次）
   useEffect(() => {
-    if (search?.new && article && titleInputRef.current) {
+    if (search?.new && article && titleInputRef.current && !hasFocusedTitleRef.current) {
+      hasFocusedTitleRef.current = true;
       // 延迟一下确保 DOM 已渲染
       setTimeout(() => {
         titleInputRef.current?.focus();
@@ -203,7 +248,7 @@ function EditArticlePage() {
     }
   }, [search?.new, article]);
 
-  // 处理标题变化 - 防抖保存
+  // 处理标题变化 - 防抖保存（使用 ref 避免依赖变化）
   const handleTitleChange = useCallback(
     (newTitle: string) => {
       setTitle(newTitle);
@@ -211,12 +256,12 @@ function EditArticlePage() {
       if (isInitialLoadRef.current) {
         return;
       }
-      debouncedSave(newTitle, content, summary);
+      debouncedSave(newTitle, contentRef.current, summaryRef.current);
     },
-    [content, summary, debouncedSave]
+    [debouncedSave]
   );
 
-  // 处理内容变化 - 防抖保存
+  // 处理内容变化 - 防抖保存（使用 ref 避免依赖变化）
   const handleContentChange = useCallback(
     (newContent: string) => {
       setContent(newContent);
@@ -224,9 +269,9 @@ function EditArticlePage() {
       if (isInitialLoadRef.current) {
         return;
       }
-      debouncedSave(title, newContent, summary);
+      debouncedSave(titleRef.current, newContent, summaryRef.current);
     },
-    [title, summary, debouncedSave]
+    [debouncedSave]
   );
 
   // 处理 Word 导入
@@ -243,12 +288,8 @@ function EditArticlePage() {
   );
 
   const onSave = async () => {
-    if (!content.trim()) {
-      message.error("请输入文章内容");
-      return;
-    }
-    // 使用 doSave 来保存，确保 base64 图片被正确替换为 URL
-    await doSave(title, content, summary);
+    // 使用 manualSave 来保存，避免和自动保存冲突
+    await manualSave();
   };
 
   if (isLoading) {

@@ -512,6 +512,9 @@ export function FileTree() {
   const [draggedItem, setDraggedItem] = useState<DragData | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
 
+  // 获取 tRPC context 用于手动刷新其他查询
+  const trpcUtils = trpc.useContext();
+
   // 获取树结构数据
   const { data, refetch, isFetching } = trpc.folder.tree.useQuery();
 
@@ -555,6 +558,8 @@ export function FileTree() {
   const createArticleMutation = trpc.articleExt.createInFolder.useMutation({
     onSuccess: (article: any) => {
       refetch();
+      // 刷新文章列表页面的数据
+      trpcUtils.article.list.invalidate();
       // 导航到新创建的文章，带上 new 参数以便聚焦标题
       navigate({ to: "/articles/$id/edit", params: { id: String(article.id) }, search: { new: true } });
     },
@@ -567,6 +572,8 @@ export function FileTree() {
   const deleteArticleMutation = trpc.article.delete.useMutation({
     onSuccess: (_: any, variables: { id: number }) => {
       refetch();
+      // 刷新文章列表页面的数据
+      trpcUtils.article.list.invalidate();
       setDeleteDialogOpen(false);
       // 检查当前是否正在编辑被删除的文章，如果是则导航到文章列表
       const editMatch = location.pathname.match(/^\/articles\/(\d+)\/edit$/);

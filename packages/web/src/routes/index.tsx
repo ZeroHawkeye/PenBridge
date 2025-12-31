@@ -279,7 +279,7 @@ function HomePage() {
   });
 
   // 掘金社区状态
-  const { data: juejinAuthStatus } = trpc.juejinAuth.status.useQuery();
+  const { data: juejinAuthStatus, isLoading: juejinAuthLoading } = trpc.juejinAuth.status.useQuery();
   const {
     data: juejinStatusCount,
     isLoading: juejinStatusLoading,
@@ -310,7 +310,7 @@ function HomePage() {
     },
   });
 
-  const isStatsLoading = draftLoading || scheduledLoading || publishedLoading;
+
 
   return (
     <div className="p-4 space-y-3 max-w-7xl mx-auto">
@@ -355,65 +355,68 @@ function HomePage() {
         </Card>
       )}
 
-      {/* 统计卡片 */}
+      {/* 统计卡片 - 每个卡片独立加载 */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        {isStatsLoading ? (
-          [1, 2, 3, 4].map((i) => (
-            <Card key={i} className="py-0 gap-0">
-              <CardContent className="p-3">
-                <Skeleton className="h-4 w-16 mb-1.5" />
-                <Skeleton className="h-6 w-10" />
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <>
-            <Card className="py-0 gap-0 group hover:border-blue-200 dark:hover:border-blue-800 transition-colors">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">草稿箱</span>
-                  <div className="h-6 w-6 rounded-md bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
-                    <FileText className="h-3.5 w-3.5 text-blue-500" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold mt-1 tracking-tight">{draftArticles?.total || 0}</p>
-              </CardContent>
-            </Card>
-            <Card className="py-0 gap-0 group hover:border-orange-200 dark:hover:border-orange-800 transition-colors">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">待发布</span>
-                  <div className="h-6 w-6 rounded-md bg-orange-50 dark:bg-orange-950 flex items-center justify-center">
-                    <Clock className="h-3.5 w-3.5 text-orange-500" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold mt-1 tracking-tight">{scheduledArticles?.total || 0}</p>
-              </CardContent>
-            </Card>
-            <Card className="py-0 gap-0 group hover:border-green-200 dark:hover:border-green-800 transition-colors">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">已发布</span>
-                  <div className="h-6 w-6 rounded-md bg-green-50 dark:bg-green-950 flex items-center justify-center">
-                    <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold mt-1 tracking-tight">{publishedArticles?.total || 0}</p>
-              </CardContent>
-            </Card>
-            <Card className="py-0 gap-0 group hover:border-purple-200 dark:hover:border-purple-800 transition-colors">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">定时任务</span>
-                  <div className="h-6 w-6 rounded-md bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
-                    <Calendar className="h-3.5 w-3.5 text-purple-500" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold mt-1 tracking-tight">{pendingTasks?.length || 0}</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card className="py-0 gap-0 group hover:border-blue-200 dark:hover:border-blue-800 transition-colors">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">草稿箱</span>
+              <div className="h-6 w-6 rounded-md bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
+                <FileText className="h-3.5 w-3.5 text-blue-500" />
+              </div>
+            </div>
+            {draftLoading ? (
+              <Skeleton className="h-8 w-10 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 tracking-tight">{draftArticles?.total || 0}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="py-0 gap-0 group hover:border-orange-200 dark:hover:border-orange-800 transition-colors">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">待发布</span>
+              <div className="h-6 w-6 rounded-md bg-orange-50 dark:bg-orange-950 flex items-center justify-center">
+                <Clock className="h-3.5 w-3.5 text-orange-500" />
+              </div>
+            </div>
+            {scheduledLoading ? (
+              <Skeleton className="h-8 w-10 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 tracking-tight">{scheduledArticles?.total || 0}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="py-0 gap-0 group hover:border-green-200 dark:hover:border-green-800 transition-colors">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">已发布</span>
+              <div className="h-6 w-6 rounded-md bg-green-50 dark:bg-green-950 flex items-center justify-center">
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+              </div>
+            </div>
+            {publishedLoading ? (
+              <Skeleton className="h-8 w-10 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 tracking-tight">{publishedArticles?.total || 0}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="py-0 gap-0 group hover:border-purple-200 dark:hover:border-purple-800 transition-colors">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">定时任务</span>
+              <div className="h-6 w-6 rounded-md bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
+                <Calendar className="h-3.5 w-3.5 text-purple-500" />
+              </div>
+            </div>
+            {tasksLoading ? (
+              <Skeleton className="h-8 w-10 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 tracking-tight">{pendingTasks?.length || 0}</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* 发布平台状态 */}
@@ -425,13 +428,14 @@ function HomePage() {
               <CardTitle className="text-sm font-medium flex items-center gap-1.5">
                 <CloudUpload className="h-3.5 w-3.5" />
                 腾讯云社区
+                {authLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
               </CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 text-xs px-2"
                 onClick={() => tencentSyncMutation.mutate()}
-                disabled={tencentSyncMutation.isLoading || !tencentAuthStatus?.isLoggedIn}
+                disabled={tencentSyncMutation.isLoading || authLoading || !tencentAuthStatus?.isLoggedIn}
               >
                 {tencentSyncMutation.isLoading ? (
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -443,7 +447,13 @@ function HomePage() {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-3 pt-0">
-            {!tencentAuthStatus?.isLoggedIn ? (
+            {authLoading ? (
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-11" />
+                ))}
+              </div>
+            ) : !tencentAuthStatus?.isLoggedIn ? (
               <div className="text-center py-2 text-muted-foreground">
                 <p className="text-xs">请先登录腾讯云账号</p>
               </div>
@@ -488,13 +498,14 @@ function HomePage() {
               <CardTitle className="text-sm font-medium flex items-center gap-1.5">
                 <Coffee className="h-3.5 w-3.5" />
                 掘金社区
+                {juejinAuthLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
               </CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 text-xs px-2"
                 onClick={() => juejinSyncMutation.mutate()}
-                disabled={juejinSyncMutation.isLoading || !juejinAuthStatus?.isLoggedIn}
+                disabled={juejinSyncMutation.isLoading || juejinAuthLoading || !juejinAuthStatus?.isLoggedIn}
               >
                 {juejinSyncMutation.isLoading ? (
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -506,7 +517,13 @@ function HomePage() {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-3 pt-0">
-            {!juejinAuthStatus?.isLoggedIn ? (
+            {juejinAuthLoading ? (
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-11" />
+                ))}
+              </div>
+            ) : !juejinAuthStatus?.isLoggedIn ? (
               <div className="text-center py-2 text-muted-foreground">
                 <p className="text-xs">请先登录掘金账号</p>
               </div>

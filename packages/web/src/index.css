@@ -1192,3 +1192,126 @@ a .text-foreground,
   }
 }
 
+/* ==================== AI 模型选择器样式 - antd Select ==================== */
+.ai-model-select {
+  font-size: 12px !important;
+}
+
+.ai-model-select .ant-select-selector {
+  height: 32px !important;
+  border-radius: 6px !important;
+  border-color: var(--border) !important;
+  background: var(--background) !important;
+}
+
+.ai-model-select .ant-select-selection-item {
+  line-height: 30px !important;
+  font-size: 12px !important;
+}
+
+.ai-model-select:hover .ant-select-selector {
+  border-color: var(--ring) !important;
+}
+
+.ai-model-select.ant-select-focused .ant-select-selector {
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 2px oklch(0.708 0 0 / 0.2) !important;
+}
+
+.ai-model-select-popup {
+  font-size: 12px !important;
+}
+
+.ai-model-select-popup .ant-select-item {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+}
+
+.ai-model-select-popup .ant-select-item-option-selected {
+  background: var(--accent) !important;
+}
+
+.dark .ai-model-select .ant-select-selector {
+  background: var(--input) !important;
+  border-color: var(--border) !important;
+}
+
+.dark .ai-model-select .ant-select-selection-item,
+.dark .ai-model-select .ant-select-selection-placeholder {
+  color: var(--foreground) !important;
+}
+
+.dark .ai-model-select .ant-select-arrow {
+  color: var(--muted-foreground) !important;
+}
+
+.dark .ai-model-select-popup {
+  background: var(--popover) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.dark .ai-model-select-popup .ant-select-item {
+  color: var(--foreground) !important;
+}
+
+.dark .ai-model-select-popup .ant-select-item-option-active {
+  background: var(--accent) !important;
+}
+
+.dark .ai-model-select-popup .ant-select-item-option-selected {
+  background: var(--accent) !important;
+}
+
+/* ==================== 设置抽屉样式 - antd Drawer ==================== */
+/* 使用 getContainer={false} 时，Drawer wrapper 是 absolute 定位 */
+/* 确保不会超出父容器边界，并避开 Electron titlebar (32px) */
+.settings-drawer.ant-drawer {
+  position: absolute !important;
+  top: 0 !important;
+  height: 100% !important;
+}
+
+.settings-drawer .ant-drawer-content-wrapper {
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1) !important;
+  height: 100% !important;
+}
+
+.settings-drawer .ant-drawer-header {
+  background: var(--background) !important;
+}
+
+.settings-drawer .ant-drawer-header-title {
+  flex-direction: row-reverse;
+}
+
+.settings-drawer .ant-drawer-title {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--foreground) !important;
+}
+
+.settings-drawer .ant-drawer-body {
+  background: var(--background) !important;
+}
+
+.settings-drawer .ant-drawer-close {
+  color: var(--muted-foreground) !important;
+}
+
+.settings-drawer .ant-drawer-close:hover {
+  color: var(--foreground) !important;
+}
+
+.dark .settings-drawer .ant-drawer-content {
+  background: var(--background) !important;
+}
+
+.dark .settings-drawer .ant-drawer-header {
+  background: var(--background) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+.dark .settings-drawer .ant-drawer-title {
+  color: var(--foreground) !important;
+}
+
