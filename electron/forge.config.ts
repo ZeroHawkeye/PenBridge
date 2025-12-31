@@ -9,7 +9,7 @@ const config: ForgeConfig = {
     name: "PenBridge",
     executableName: "penbridge",
     appCopyright: "Copyright © 2026",
-    icon: "./assets/icon", // 应用图标路径（不带扩展名，打包时自动匹配 .ico/.icns/.png）
+    icon: "./assets/icons", // 应用图标路径（不带扩展名，打包时自动匹配 .ico/.icns/.png）
     ignore: [
       /^\/src/,
       /^\/tsconfig\.json$/,
