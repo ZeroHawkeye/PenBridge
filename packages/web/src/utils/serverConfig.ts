@@ -182,3 +182,10 @@ export function getTrpcUrl(): string {
   const baseUrl = getServerBaseUrlSync();
   return `${baseUrl}/trpc`;
 }
+
+/**
+ * 获取 API 基础 URL（同步版本，用于 fetch 请求）
+ */
+export function getApiBaseUrl(): string {
+  return getServerBaseUrlSync();
+}

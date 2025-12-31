@@ -39,6 +39,7 @@
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
     "dictionary-en": "^4.0.0",
+    "diff": "^8.0.2",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",
     "nspell": "^2.1.5",
@@ -51,6 +52,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@types/diff": "^8.0.0",
     "@types/nspell": "^2.1.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

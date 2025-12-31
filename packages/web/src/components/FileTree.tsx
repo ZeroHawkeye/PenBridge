@@ -343,8 +343,8 @@ function TreeNodeItem({
               onDrop={handleDrop}
               onClick={() => onToggleFolder(node.id)}
               className={cn(
-                "flex items-center w-full px-2 py-1 text-sm hover:bg-accent rounded-sm group min-w-0",
-                "text-left transition-colors",
+                "flex items-center w-full px-2 py-1 text-sm hover:bg-accent rounded-sm group",
+                "text-left transition-colors overflow-hidden",
                 isDragging && "opacity-50",
                 isDropTarget && "bg-primary/20 ring-2 ring-primary ring-inset"
               )}
@@ -368,7 +368,7 @@ function TreeNodeItem({
                   onCancel={handleCancelEdit}
                 />
               ) : (
-                <span className="truncate text-foreground">{node.name}</span>
+                <span className="truncate flex-1 min-w-0 text-foreground">{node.name}</span>
               )}
             </button>
           </ContextMenuTrigger>
@@ -450,8 +450,8 @@ function TreeNodeItem({
           to="/articles/$id/edit"
           params={{ id: String(node.id) }}
           className={cn(
-            "flex items-center w-full px-2 py-1 text-sm hover:bg-accent rounded-sm group min-w-0",
-            "transition-colors text-foreground",
+            "flex items-center w-full px-2 py-1 text-sm hover:bg-accent rounded-sm group",
+            "transition-colors text-foreground overflow-hidden",
             isDragging && "opacity-50"
           )}
           style={{ paddingLeft: `${depth * 20 + 8}px` }}
@@ -464,7 +464,7 @@ function TreeNodeItem({
               onCancel={() => setIsEditing(false)}
             />
           ) : (
-            <span className="truncate">{node.name}</span>
+            <span className="truncate flex-1 min-w-0">{node.name}</span>
           )}
         </Link>
       </ContextMenuTrigger>

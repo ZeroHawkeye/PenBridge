@@ -378,3 +378,31 @@ a .text-foreground,
 .spell-menu-item {
   transition: background-color 0.1s ease;
 }
+
+/* 目录点击标题高亮效果 */
+.toc-highlight {
+  animation: toc-highlight-pulse 2s ease-out;
+}
+
+@keyframes toc-highlight-pulse {
+  0% {
+    background-color: oklch(0.8 0.15 80);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.dark .toc-highlight {
+  animation: toc-highlight-pulse-dark 2s ease-out;
+}
+
+@keyframes toc-highlight-pulse-dark {
+  0% {
+    background-color: oklch(0.4 0.15 80);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+

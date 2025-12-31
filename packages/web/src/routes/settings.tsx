@@ -2033,6 +2033,9 @@ function AIConfigSettings() {
       vision: {
         supported: false,
       },
+      aiLoop: {
+        maxLoopCount: 20,
+      },
     },
   });
 
@@ -2158,10 +2161,13 @@ function AIConfigSettings() {
       enabled: true,
     },
     functionCalling: {
-      supported: false,
+      supported: true,  // 默认启用，主流模型都支持工具调用
     },
     vision: {
       supported: false,
+    },
+    aiLoop: {
+      maxLoopCount: 20,
     },
   };
 
@@ -2208,6 +2214,10 @@ function AIConfigSettings() {
       vision: {
         ...defaultCapabilities.vision,
         ...(modelCapabilities.vision || {}),
+      },
+      aiLoop: {
+        ...defaultCapabilities.aiLoop,
+        ...(modelCapabilities.aiLoop || {}),
       },
     };
     
@@ -2943,6 +2953,38 @@ function AIConfigSettings() {
                           })}
                         />
                       </div>
+                    </div>
+
+                    {/* AI Loop 配置 */}
+                    <div className="space-y-2 p-3 rounded-md bg-muted/50">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="ailoop-maxcount" className="text-sm font-normal">
+                          AI Loop 最大循环次数
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="ailoop-maxcount"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={modelForm.capabilities.aiLoop.maxLoopCount}
+                          onChange={(e) => setModelForm({
+                            ...modelForm,
+                            capabilities: {
+                              ...modelForm.capabilities,
+                              aiLoop: { maxLoopCount: parseInt(e.target.value) || 20 },
+                            },
+                          })}
+                          className="w-24"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          (1-100, 防止死循环)
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        AI 在对话中可以连续执行工具调用的最大次数，用于 Agent 式多步任务
+                      </p>
                     </div>
                   </div>
                 </div>

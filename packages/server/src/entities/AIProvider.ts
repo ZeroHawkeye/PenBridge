@@ -130,6 +130,11 @@ export class AIModel {
     vision?: {
       supported: boolean;
     };
+    // AI Loop 配置（Agent 式多步任务）
+    aiLoop?: {
+      // 最大循环次数（防止死循环）
+      maxLoopCount: number;
+    };
   };
 
   @CreateDateColumn()
