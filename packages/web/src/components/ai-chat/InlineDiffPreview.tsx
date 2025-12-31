@@ -5,21 +5,23 @@
  */
 
 import { useMemo, useState } from "react";
-import * as Diff from "diff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Check, 
-  X, 
-  FileText, 
+import {
+  Check,
+  X,
+  FileText,
   Type,
   Plus,
   Minus,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PendingChange } from "./types";
+import { generateOptimizedDiff, generateChangeSummary } from "./tools/optimizedDiff";
+import type { DiffLine } from "./tools/optimizedDiff";
 
 interface InlineDiffPreviewProps {
   pendingChange: PendingChange;
@@ -27,66 +29,8 @@ interface InlineDiffPreviewProps {
   onReject: (change: PendingChange) => void;
 }
 
-// Diff 行类型
-interface DiffLine {
-  type: "added" | "removed" | "unchanged" | "separator";
-  content: string;
-  oldLineNum?: number;
-  newLineNum?: number;
-}
-
-// 生成统一的 diff 视图
-function generateUnifiedDiff(oldText: string, newText: string): DiffLine[] {
-  const changes = Diff.diffLines(oldText, newText);
-  const lines: DiffLine[] = [];
-  let oldLineNum = 1;
-  let newLineNum = 1;
-
-  for (const change of changes) {
-    const changeLines = change.value.split("\n");
-    // 移除最后一个空字符串（如果是换行符结尾）
-    if (changeLines[changeLines.length - 1] === "") {
-      changeLines.pop();
-    }
-
-    for (const line of changeLines) {
-      if (change.added) {
-        lines.push({
-          type: "added",
-          content: line,
-          newLineNum: newLineNum++,
-        });
-      } else if (change.removed) {
-        lines.push({
-          type: "removed",
-          content: line,
-          oldLineNum: oldLineNum++,
-        });
-      } else {
-        lines.push({
-          type: "unchanged",
-          content: line,
-          oldLineNum: oldLineNum++,
-          newLineNum: newLineNum++,
-        });
-      }
-    }
-  }
-
-  return lines;
-}
-
-// 统计变更
-function countChanges(lines: DiffLine[]): { added: number; removed: number } {
-  return lines.reduce(
-    (acc, line) => {
-      if (line.type === "added") acc.added++;
-      if (line.type === "removed") acc.removed++;
-      return acc;
-    },
-    { added: 0, removed: 0 }
-  );
-}
+// 移除了旧的 generateUnifiedDiff 和 countChanges 函数
+// 现在使用 optimizedDiff.ts 中的优化版本
 
 // 操作类型的中文描述
 const operationNames: Record<string, string> = {
@@ -104,15 +48,34 @@ export function InlineDiffPreview({
   const [isExpanded, setIsExpanded] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 生成 diff 行
-  const diffLines = useMemo(() => {
-    return generateUnifiedDiff(pendingChange.oldValue, pendingChange.newValue);
-  }, [pendingChange]);
+  // 检查是否应该跳过 Diff 计算
+  const shouldSkipDiff = pendingChange.skipDiff ?? false;
 
-  // 统计变更数量
-  const changeStats = useMemo(() => {
-    return countChanges(diffLines);
-  }, [diffLines]);
+  // 生成变更摘要（轻量级，不计算完整 diff）
+  const changeSummary = useMemo(() => {
+    return generateChangeSummary(pendingChange.oldValue, pendingChange.newValue);
+  }, [pendingChange.oldValue, pendingChange.newValue]);
+
+  // 生成优化的 diff（仅在展开且未跳过时计算）
+  const diffResult = useMemo(() => {
+    if (shouldSkipDiff || !isExpanded) {
+      return null;
+    }
+    return generateOptimizedDiff(pendingChange.oldValue, pendingChange.newValue, {
+      contextLines: 3,
+      maxDisplayLines: 500,
+      skipIfTooLarge: 5 * 1024 * 1024, // 5 MB
+    });
+  }, [pendingChange.oldValue, pendingChange.newValue, shouldSkipDiff, isExpanded]);
+
+  const diffLines = diffResult?.lines ?? [];
+  const changeStats = diffResult?.stats ?? {
+    added: changeSummary.addedLines,
+    removed: changeSummary.removedLines,
+    unchanged: 0,
+    changedLines: changeSummary.addedLines + changeSummary.removedLines,
+    totalChangedCharacters: Math.abs(changeSummary.addedChars) + changeSummary.removedChars,
+  };
 
   // 只显示有变化的行（和周围几行上下文），省略未变化的部分
   const filteredLines = useMemo(() => {

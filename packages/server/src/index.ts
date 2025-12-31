@@ -652,8 +652,53 @@ app.post("/api/ai/chat/stream", async (c) => {
       if (shouldEnableTools) {
         contextInfo += `
 
-你可以使用 read_article 或 read_article_chunk 工具来读取文章内容。
-如果用户要求修改文章，请使用相应的工具（如 update_title, insert_content, replace_content 等）。`;
+## 可用工具
+
+你可以使用以下工具来读取和修改文章：
+
+**读取工具**：
+- read_article: 读取文章内容（支持按行范围读取）
+  - 返回的内容包含行号前缀（格式："行号 | 内容"）
+  - 行号仅用于你理解位置，在其他工具中使用内容时请勿包含行号前缀
+
+**修改工具**：
+- update_title: 更新文章标题
+- insert_content: 在开头或末尾插入新内容
+- replace_content: 替换指定内容（**推荐用于小范围修改**）
+- replace_all_content: 完全替换文章内容（仅用于大范围重写）
+
+## replace_content 工具使用规范（重要）
+
+使用 replace_content 时，请严格遵循以下规则：
+
+1. **不要包含行号前缀**：
+   - read_article 返回 "123 | Hello World"
+   - replace_content 的 search 参数应为 "Hello World"（不包含 "123 | "）
+
+2. **提供足够的上下文确保唯一性**：
+   - ❌ 错误：search="函数"（太短，可能有多个匹配）
+   - ✅ 正确：search="function calculateTotal() {\\n  return price * quantity;\\n}"（包含 2-3 行完整内容）
+
+3. **处理重复内容**：
+   - 如果内容在多处重复，系统会返回所有匹配位置
+   - 使用 replaceAt=N 参数替换第 N 个匹配
+   - 或使用 replaceRange 参数限定行范围
+   - 或使用 replaceAll=true 替换所有匹配
+
+4. **保持完整的文本结构**：
+   - 包含完整的句子、段落或代码块
+   - 保持原有的缩进和格式
+   - 不要只提取部分单词或破坏 Markdown 语法
+
+5. **匹配策略说明**：
+   - 系统会自动处理换行符差异（LF vs CRLF）
+   - 会自动忽略轻微的空白字符差异
+   - 如果精确匹配失败，会尝试模糊匹配并告知你相似度
+
+6. **工具选择建议**：
+   - 小范围修改（< 50 行）：使用 replace_content
+   - 大范围重写（> 50 行）：使用 replace_all_content
+   - 仅需要添加内容：使用 insert_content`;
       }
       
       if (systemMessage) {
