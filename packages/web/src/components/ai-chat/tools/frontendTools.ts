@@ -5,6 +5,8 @@
  */
 
 import type { FrontendToolContext, ToolCallRecord, PendingChange } from "../types";
+import { intelligentMatch, normalizeLineEndings, stripLineNumbers, normalizeWhitespace } from "./stringMatcher";
+import { shouldSkipDiff } from "./optimizedDiff";
 
 // 工具执行结果
 export interface ToolExecutionResult {
@@ -184,14 +186,178 @@ export async function executeFrontendTool(
           return { success: false, error: "缺少 search 或 replace 参数" };
         }
 
-        if (!context.content.includes(args.search)) {
+        // 验证搜索文本不能为空（空字符串会导致 split 行为异常）
+        if (args.search.trim() === "") {
+          return { success: false, error: "搜索文本不能为空或仅包含空白字符" };
+        }
+
+        // 使用智能匹配
+        const matchResult = intelligentMatch(context.content, args.search, {
+          requireUnique: !args.replaceAll,
+          maxAlternatives: 5,
+          fuzzyThreshold: 0.85,
+        });
+
+        // 匹配失败
+        if (!matchResult.found) {
+          let errorMessage = matchResult.warnings.join('\n');
+
+          // 如果有候选匹配，列出来
+          if (matchResult.alternatives && matchResult.alternatives.length > 0) {
+            errorMessage += `\n\n找到 ${matchResult.alternatives.length} 个可能的匹配位置：\n`;
+            matchResult.alternatives.forEach((alt, i) => {
+              errorMessage += `\n${i + 1}. 第 ${alt.lineNumber} 行（相似度 ${(alt.similarity * 100).toFixed(0)}%）：\n${alt.preview}\n`;
+            });
+            errorMessage += `\n建议：\n`;
+            errorMessage += `1. 提供更多上下文使搜索文本唯一\n`;
+            errorMessage += `2. 使用 replaceAll: true 替换所有匹配\n`;
+            errorMessage += `3. 使用 replaceAt: N 只替换第 N 个匹配\n`;
+            errorMessage += `4. 使用 replaceRange 限定行范围`;
+          } else {
+            errorMessage += `\n\n可能的原因：\n`;
+            errorMessage += `- 搜索文本包含了行号前缀（如 "1 | "），请只提供实际内容\n`;
+            errorMessage += `- 换行符不匹配（Windows CRLF vs Unix LF）\n`;
+            errorMessage += `- 空白字符（空格、制表符）不一致\n`;
+            errorMessage += `\n提示：系统已自动尝试标准化换行符和空白字符，但仍未找到匹配`;
+          }
+
           return {
             success: false,
-            error: "未找到要替换的内容"
+            error: errorMessage,
           };
         }
 
-        const newContent = context.content.replace(args.search, args.replace);
+        // 执行替换
+        let newContent: string;
+        let description: string;
+        let occurrences = 1;
+
+        if (args.replaceAll) {
+          // 替换所有匹配
+          const normalizedContent = normalizeLineEndings(context.content);
+          const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
+          const normalizedReplace = normalizeLineEndings(args.replace);
+
+          // 验证是否找到匹配
+          occurrences = normalizedContent.split(normalizedSearch).length - 1;
+          if (occurrences === 0) {
+            return {
+              success: false,
+              error: `未找到匹配内容。可能的原因：\n- 搜索文本包含了行号前缀\n- 换行符不匹配\n- 内容不存在\n\n提示：使用不带 replaceAll 参数的 replace_content 可以获得智能匹配和详细错误信息。`,
+            };
+          }
+
+          newContent = normalizedContent.replaceAll(normalizedSearch, normalizedReplace);
+          description = `替换所有 ${occurrences} 处匹配`;
+        } else if (args.replaceAt !== undefined) {
+          // 替换第 N 个匹配
+          const n = args.replaceAt;
+          const normalizedContent = normalizeLineEndings(context.content);
+          const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
+          const normalizedReplace = normalizeLineEndings(args.replace);
+
+          const parts = normalizedContent.split(normalizedSearch);
+          const matchCount = parts.length - 1;
+
+          if (matchCount === 0) {
+            return {
+              success: false,
+              error: `未找到匹配内容。可能的原因：\n- 搜索文本包含了行号前缀\n- 换行符不匹配\n- 内容不存在\n\n提示：使用不带 replaceAt 参数的 replace_content 可以获得智能匹配和详细错误信息。`,
+            };
+          }
+
+          if (n < 1 || n > matchCount) {
+            return {
+              success: false,
+              error: `replaceAt=${n} 超出范围（共找到 ${matchCount} 个匹配）`,
+            };
+          }
+
+          // 只替换第 n 个
+          newContent = parts.slice(0, n).join(normalizedSearch) +
+                      normalizedReplace +
+                      parts.slice(n + 1).join(normalizedSearch);
+          description = `替换第 ${n}/${matchCount} 处匹配`;
+        } else if (args.replaceRange) {
+          // 替换指定行范围内的匹配
+          const { startLine, endLine } = args.replaceRange;
+
+          // Bug Fix: 需要先标准化整个内容，然后再按行分割
+          // 否则 rangeContent 和 normalizedSearch 的换行符可能不匹配
+          const normalizedContent = normalizeLineEndings(context.content);
+          const lines = normalizedContent.split('\n');
+
+          if (startLine < 1 || endLine > lines.length || startLine > endLine) {
+            return {
+              success: false,
+              error: `行范围 ${startLine}-${endLine} 无效（文档共 ${lines.length} 行）`,
+            };
+          }
+
+          const beforeLines = lines.slice(0, startLine - 1);
+          const rangeLines = lines.slice(startLine - 1, endLine);
+          const afterLines = lines.slice(endLine);
+
+          const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
+          const normalizedReplace = normalizeLineEndings(args.replace);
+          const rangeContent = rangeLines.join('\n');  // 现在是标准化后的内容
+
+          // 验证是否找到匹配
+          occurrences = rangeContent.split(normalizedSearch).length - 1;
+          if (occurrences === 0) {
+            return {
+              success: false,
+              error: `在第 ${startLine}-${endLine} 行范围内未找到匹配内容。可能的原因：\n- 搜索文本包含了行号前缀\n- 换行符不匹配\n- 该行范围内不存在该内容\n\n提示：使用不带 replaceRange 参数的 replace_content 可以获得智能匹配和详细错误信息。`,
+            };
+          }
+
+          const newRangeContent = rangeContent.replaceAll(normalizedSearch, normalizedReplace);
+
+          // 处理空字符串情况：空字符串 split('\n') 返回 ['']，会产生一个空行
+          const newRangeLines = newRangeContent ? newRangeContent.split('\n') : [];
+          newContent = [...beforeLines, ...newRangeLines, ...afterLines].join('\n');
+          description = `替换第 ${startLine}-${endLine} 行内的 ${occurrences} 处匹配`;
+        } else {
+          // 单次替换（已验证唯一性）
+          const normalizedContent = normalizeLineEndings(context.content);
+          const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
+          const normalizedReplace = normalizeLineEndings(args.replace);
+
+          // 根据匹配策略选择替换方法
+          if (matchResult.strategy === 'exact' || matchResult.strategy === 'normalized-lines') {
+            // 精确匹配或标准化行匹配，可以直接用 replace
+            newContent = normalizedContent.replace(normalizedSearch, normalizedReplace);
+          } else if (matchResult.strategy === 'normalized-whitespace' || matchResult.strategy === 'fuzzy') {
+            // Bug Fix: 对于空白字符标准化和模糊匹配，由于保留原始空白字符格式的复杂性
+            // 采用最实用的方案：在完全标准化的内容中进行替换，同时保留缩进
+            //
+            // 设计说明：
+            // - normalizeWhitespace 保留前导空格（缩进），只标准化行内空白字符
+            // - 这样可以保持代码/文档的缩进结构，同时统一空白字符格式
+            // - intelligentMatch 已验证唯一性，可以安全使用 replace()
+
+            const fullyNormalizedContent = normalizeWhitespace(normalizedContent);
+            const fullyNormalizedSearch = normalizeWhitespace(stripLineNumbers(normalizeLineEndings(args.search)));
+
+            // 直接在完全标准化的内容中替换
+            newContent = fullyNormalizedContent.replace(fullyNormalizedSearch, normalizedReplace);
+          } else {
+            // 未知策略，返回错误
+            return {
+              success: false,
+              error: `不支持的匹配策略: ${matchResult.strategy}`,
+            };
+          }
+
+          description = `替换匹配的内容（${matchResult.strategy} 策略）`;
+
+          if (matchResult.warnings.length > 0) {
+            description += ` - ${matchResult.warnings.join(', ')}`;
+          }
+        }
+
+        // 检查是否应该跳过 Diff（文件太大）
+        const diffCheck = shouldSkipDiff(context.content, newContent, 5 * 1024 * 1024);
 
         // 返回待确认的变更
         return {
@@ -199,6 +365,12 @@ export async function executeFrontendTool(
           result: {
             message: "内容替换待确认",
             requiresConfirmation: true,
+            matchStrategy: matchResult.strategy,
+            confidence: matchResult.confidence,
+            warnings: matchResult.warnings,
+            occurrences,
+            skipDiff: diffCheck.shouldSkip,
+            diffSkipReason: diffCheck.reason,
           },
           pendingChange: {
             id: `change_${Date.now()}`,
@@ -207,9 +379,10 @@ export async function executeFrontendTool(
             operation: "replace",
             oldValue: context.content,
             newValue: newContent,
-            description: `替换匹配的内容（搜索: ${args.search.slice(0, 50)}${args.search.length > 50 ? "..." : ""}）`,
+            description,
             searchText: args.search,
             replaceText: args.replace,
+            skipDiff: diffCheck.shouldSkip,
           },
         };
       }

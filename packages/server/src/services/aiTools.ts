@@ -115,17 +115,64 @@ export const frontendToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "replace_content",
-      description: "替换文章中的指定内容",
+      description: `替换文章中的指定内容。使用智能多层匹配策略，自动处理换行符和空白字符差异。
+
+**重要提示**：
+- 当使用 read_article 工具读取内容时，返回的内容包含行号前缀（格式："行号 | 内容"）
+- 在使用 replace_content 时，search 参数中**不要包含行号前缀**，只提供实际的文本内容
+- 系统会自动处理换行符差异（LF vs CRLF）和空白字符标准化
+
+**匹配策略**（自动按优先级尝试）：
+1. 精确匹配：完全匹配原文
+2. 标准化匹配：自动去除行号前缀、统一换行符
+3. 空白字符标准化：忽略空格/制表符差异
+4. 模糊匹配：基于相似度的智能匹配
+
+**替换模式**：
+- 默认：要求搜索文本唯一，否则返回所有匹配位置让你选择
+- replaceAll=true：替换所有匹配项
+- replaceAt=N：仅替换第 N 个匹配项（N 从 1 开始）
+- replaceRange：仅替换指定行范围内的匹配项
+
+**最佳实践**：
+1. 提供足够的上下文使搜索文本唯一（建议至少 2-3 行完整内容）
+2. 不要从 read_article 的输出中复制行号前缀
+3. 对于重复内容，使用 replaceAt 或 replaceRange 精确定位
+4. 小范围修改优先使用此工具，大范围重写使用 replace_all_content`,
       parameters: {
         type: "object",
         properties: {
           search: {
             type: "string",
-            description: "要查找的文本",
+            description: "要查找的文本内容（不要包含行号前缀，只提供实际内容）",
           },
           replace: {
             type: "string",
-            description: "替换为的文本",
+            description: "替换为的文本内容",
+          },
+          replaceAll: {
+            type: "boolean",
+            description: "是否替换所有匹配项。默认 false，要求搜索文本唯一",
+            default: false,
+          },
+          replaceAt: {
+            type: "number",
+            description: "仅替换第 N 个匹配项（从 1 开始）。用于精确控制替换位置",
+          },
+          replaceRange: {
+            type: "object",
+            description: "限定替换范围（仅在指定行范围内查找并替换）",
+            properties: {
+              startLine: {
+                type: "number",
+                description: "起始行号（从 1 开始，包含）",
+              },
+              endLine: {
+                type: "number",
+                description: "结束行号（包含）",
+              },
+            },
+            required: ["startLine", "endLine"],
           },
         },
         required: ["search", "replace"],

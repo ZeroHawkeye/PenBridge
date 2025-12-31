@@ -652,8 +652,9 @@ app.post("/api/ai/chat/stream", async (c) => {
       if (shouldEnableTools) {
         contextInfo += `
 
-你可以使用 read_article 或 read_article_chunk 工具来读取文章内容。
-如果用户要求修改文章，请使用相应的工具（如 update_title, insert_content, replace_content 等）。`;
+你可以使用工具来读取和修改文章内容。
+
+**重要提示**：read_article 工具返回的内容包含行号前缀（格式："行号 | 内容"）。行号仅用于定位，在使用 replace_content 等工具时，请勿在 search 参数中包含行号前缀，只提供实际的文本内容。`;
       }
       
       if (systemMessage) {

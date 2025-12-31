@@ -5,13 +5,12 @@
  */
 
 import { useMemo, useState } from "react";
-import * as Diff from "diff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Check, 
-  X, 
-  FileText, 
+import {
+  Check,
+  X,
+  FileText,
   Type,
   Plus,
   Minus,
@@ -20,6 +19,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PendingChange } from "./types";
+import { generateOptimizedDiff, generateChangeSummary } from "./tools/optimizedDiff";
+import type { DiffLine } from "./tools/optimizedDiff";
 
 interface InlineDiffPreviewProps {
   pendingChange: PendingChange;
@@ -27,66 +28,8 @@ interface InlineDiffPreviewProps {
   onReject: (change: PendingChange) => void;
 }
 
-// Diff 行类型
-interface DiffLine {
-  type: "added" | "removed" | "unchanged" | "separator";
-  content: string;
-  oldLineNum?: number;
-  newLineNum?: number;
-}
-
-// 生成统一的 diff 视图
-function generateUnifiedDiff(oldText: string, newText: string): DiffLine[] {
-  const changes = Diff.diffLines(oldText, newText);
-  const lines: DiffLine[] = [];
-  let oldLineNum = 1;
-  let newLineNum = 1;
-
-  for (const change of changes) {
-    const changeLines = change.value.split("\n");
-    // 移除最后一个空字符串（如果是换行符结尾）
-    if (changeLines[changeLines.length - 1] === "") {
-      changeLines.pop();
-    }
-
-    for (const line of changeLines) {
-      if (change.added) {
-        lines.push({
-          type: "added",
-          content: line,
-          newLineNum: newLineNum++,
-        });
-      } else if (change.removed) {
-        lines.push({
-          type: "removed",
-          content: line,
-          oldLineNum: oldLineNum++,
-        });
-      } else {
-        lines.push({
-          type: "unchanged",
-          content: line,
-          oldLineNum: oldLineNum++,
-          newLineNum: newLineNum++,
-        });
-      }
-    }
-  }
-
-  return lines;
-}
-
-// 统计变更
-function countChanges(lines: DiffLine[]): { added: number; removed: number } {
-  return lines.reduce(
-    (acc, line) => {
-      if (line.type === "added") acc.added++;
-      if (line.type === "removed") acc.removed++;
-      return acc;
-    },
-    { added: 0, removed: 0 }
-  );
-}
+// 移除了旧的 generateUnifiedDiff 和 countChanges 函数
+// 现在使用 optimizedDiff.ts 中的优化版本
 
 // 操作类型的中文描述
 const operationNames: Record<string, string> = {
@@ -104,79 +47,35 @@ export function InlineDiffPreview({
   const [isExpanded, setIsExpanded] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 生成 diff 行
-  const diffLines = useMemo(() => {
-    return generateUnifiedDiff(pendingChange.oldValue, pendingChange.newValue);
-  }, [pendingChange]);
+  // 检查是否应该跳过 Diff 计算
+  const shouldSkipDiff = pendingChange.skipDiff ?? false;
 
-  // 统计变更数量
-  const changeStats = useMemo(() => {
-    return countChanges(diffLines);
-  }, [diffLines]);
+  // 生成变更摘要（轻量级，不计算完整 diff）
+  const changeSummary = useMemo(() => {
+    return generateChangeSummary(pendingChange.oldValue, pendingChange.newValue);
+  }, [pendingChange.oldValue, pendingChange.newValue]);
 
-  // 只显示有变化的行（和周围几行上下文），省略未变化的部分
-  const filteredLines = useMemo(() => {
-    const contextLines = 2; // 上下文行数
-    const changedIndices = new Set<number>();
-    
-    // 找出所有变更行的索引
-    diffLines.forEach((line, i) => {
-      if (line.type !== "unchanged") {
-        changedIndices.add(i);
-      }
+  // 生成优化的 diff（仅在展开且未跳过时计算）
+  const diffResult = useMemo(() => {
+    if (shouldSkipDiff || !isExpanded) {
+      return null;
+    }
+    return generateOptimizedDiff(pendingChange.oldValue, pendingChange.newValue, {
+      contextLines: 3,
+      maxDisplayLines: 500,
+      skipIfTooLarge: 5 * 1024 * 1024, // 5 MB
     });
-    
-    // 如果没有变更，返回空
-    if (changedIndices.size === 0) {
-      return [];
-    }
-    
-    // 计算需要显示的行索引
-    const visibleIndices = new Set<number>();
-    changedIndices.forEach(idx => {
-      for (let i = Math.max(0, idx - contextLines); i <= Math.min(diffLines.length - 1, idx + contextLines); i++) {
-        visibleIndices.add(i);
-      }
-    });
-    
-    // 构建结果，添加分隔符表示省略的内容
-    const result: DiffLine[] = [];
-    let lastIndex = -1;
-    
-    const sortedIndices = Array.from(visibleIndices).sort((a, b) => a - b);
-    
-    for (const i of sortedIndices) {
-      // 如果和上一个显示的行不连续，添加分隔符
-      if (lastIndex !== -1 && i - lastIndex > 1) {
-        const skippedLines = i - lastIndex - 1;
-        result.push({
-          type: "separator",
-          content: `... 省略 ${skippedLines} 行未变更内容 ...`,
-        });
-      }
-      result.push(diffLines[i]);
-      lastIndex = i;
-    }
-    
-    // 如果开头有省略的内容
-    if (sortedIndices.length > 0 && sortedIndices[0] > 0) {
-      result.unshift({
-        type: "separator",
-        content: `... 省略前 ${sortedIndices[0]} 行未变更内容 ...`,
-      });
-    }
-    
-    // 如果结尾有省略的内容
-    if (sortedIndices.length > 0 && sortedIndices[sortedIndices.length - 1] < diffLines.length - 1) {
-      const remaining = diffLines.length - 1 - sortedIndices[sortedIndices.length - 1];
-      result.push({
-        type: "separator",
-        content: `... 省略后 ${remaining} 行未变更内容 ...`,
-      });
-    }
-    
-    return result;
-  }, [diffLines]);
+  }, [pendingChange.oldValue, pendingChange.newValue, shouldSkipDiff, isExpanded]);
+
+  // generateOptimizedDiff 已经进行了过滤和优化，直接使用其结果
+  const diffLines = diffResult?.lines ?? [];
+  const changeStats = diffResult?.stats ?? {
+    added: changeSummary.addedLines,
+    removed: changeSummary.removedLines,
+    unchanged: 0,
+    changedLines: changeSummary.addedLines + changeSummary.removedLines,
+    totalChangedCharacters: Math.abs(changeSummary.addedChars) + changeSummary.removedChars,
+  };
 
   // 处理接受
   const handleAccept = async () => {
@@ -241,14 +140,14 @@ export function InlineDiffPreview({
       {isExpanded && (
         <div className="max-h-[200px] overflow-auto">
           <div className="font-mono text-xs">
-            {filteredLines.length === 0 ? (
+            {diffLines.length === 0 ? (
               <div className="flex items-center justify-center h-16 text-muted-foreground">
                 没有检测到变更
               </div>
             ) : (
               <table className="w-full border-collapse">
                 <tbody>
-                  {filteredLines.map((line, index) => (
+                  {diffLines.map((line, index) => (
                     line.type === "separator" ? (
                       <tr key={index} className="bg-muted/50">
                         <td colSpan={2} className="px-3 py-1 text-center text-xs text-muted-foreground italic">

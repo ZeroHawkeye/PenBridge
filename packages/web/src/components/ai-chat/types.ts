@@ -15,6 +15,8 @@ export interface PendingChange {
   searchText?: string;
   replaceText?: string;
   position?: "start" | "end";
+  // 性能优化：对于大文件跳过 Diff 计算
+  skipDiff?: boolean;
 }
 
 // 工具调用记录
