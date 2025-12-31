@@ -281,7 +281,11 @@ export async function executeFrontendTool(
         } else if (args.replaceRange) {
           // 替换指定行范围内的匹配
           const { startLine, endLine } = args.replaceRange;
-          const lines = context.content.split('\n');
+
+          // Bug Fix: 需要先标准化整个内容，然后再按行分割
+          // 否则 rangeContent 和 normalizedSearch 的换行符可能不匹配
+          const normalizedContent = normalizeLineEndings(context.content);
+          const lines = normalizedContent.split('\n');
 
           if (startLine < 1 || endLine > lines.length || startLine > endLine) {
             return {
@@ -296,7 +300,7 @@ export async function executeFrontendTool(
 
           const normalizedSearch = stripLineNumbers(normalizeLineEndings(args.search));
           const normalizedReplace = normalizeLineEndings(args.replace);
-          const rangeContent = rangeLines.join('\n');
+          const rangeContent = rangeLines.join('\n');  // 现在是标准化后的内容
 
           // 验证是否找到匹配
           occurrences = rangeContent.split(normalizedSearch).length - 1;
