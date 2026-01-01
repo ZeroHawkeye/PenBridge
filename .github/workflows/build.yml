@@ -229,6 +229,28 @@ jobs:
         run: npm run build
         working-directory: electron
 
+      - name: Verify server build exists before packaging
+        run: |
+          echo "=== Checking electron/server directory ==="
+          if [ -d "electron/server" ]; then
+            find electron/server -type f
+          else
+            echo "ERROR: electron/server directory not found!"
+            exit 1
+          fi
+          
+          # 检查可执行文件
+          for arch in x64 arm64; do
+            exeFile="electron/server/pen-bridge-server-${arch}"
+            if [ -f "$exeFile" ]; then
+              size=$(du -h "$exeFile" | cut -f1)
+              echo "OK: Found $exeFile (Size: $size)"
+            else
+              echo "ERROR: $exeFile not found!"
+              exit 1
+            fi
+          done
+
       - name: Package for macOS (x64 + arm64)
         # 使用 --publish never 阻止 electron-builder 自动发布
         # 发布由最后的 release job 统一处理
@@ -329,6 +351,27 @@ jobs:
       - name: Build Electron
         run: npm run build
         working-directory: electron
+
+      - name: Verify server build exists before packaging
+        shell: pwsh
+        run: |
+          Write-Host "=== Checking electron/server directory ==="
+          if (Test-Path "electron/server") {
+            Get-ChildItem -Path "electron/server" -Recurse | ForEach-Object { Write-Host $_.FullName }
+          } else {
+            Write-Error "ERROR: electron/server directory not found!"
+            exit 1
+          }
+          
+          # 检查可执行文件
+          $exeFile = "electron/server/pen-bridge-server-x64.exe"
+          if (Test-Path $exeFile) {
+            $size = (Get-Item $exeFile).Length / 1MB
+            Write-Host "OK: Found $exeFile (Size: $([math]::Round($size, 2)) MB)"
+          } else {
+            Write-Error "ERROR: $exeFile not found!"
+            exit 1
+          }
 
       - name: Package for Windows (NSIS installer x64)
         # 使用 --publish never 阻止 electron-builder 自动发布
@@ -432,6 +475,28 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg fakeroot rpm
+
+      - name: Verify server build exists before packaging
+        run: |
+          echo "=== Checking electron/server directory ==="
+          if [ -d "electron/server" ]; then
+            find electron/server -type f
+          else
+            echo "ERROR: electron/server directory not found!"
+            exit 1
+          fi
+          
+          # 检查可执行文件
+          for arch in x64 arm64; do
+            exeFile="electron/server/pen-bridge-server-${arch}"
+            if [ -f "$exeFile" ]; then
+              size=$(du -h "$exeFile" | cut -f1)
+              echo "OK: Found $exeFile (Size: $size)"
+            else
+              echo "ERROR: $exeFile not found!"
+              exit 1
+            fi
+          done
 
       - name: Package for Linux (x64 + arm64)
         # 使用 --publish never 阻止 electron-builder 自动发布

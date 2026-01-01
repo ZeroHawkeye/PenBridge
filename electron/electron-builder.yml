@@ -25,6 +25,14 @@ asar: true
 asarUnpack:
   - server/**/*
 
+# 额外资源 - 将 server 目录复制到 resources 目录下（不打包进 asar）
+# 这是更可靠的方式，确保 server 可执行文件在正确的位置
+extraResources:
+  - from: server
+    to: app.asar.unpacked/server
+    filter:
+      - "**/*"
+
 # Windows 配置
 win:
   icon: assets/icon.ico
