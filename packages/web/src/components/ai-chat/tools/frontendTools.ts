@@ -278,31 +278,6 @@ export async function executeFrontendTool(
         };
       }
 
-      case "replace_all_content": {
-        if (!args.content) {
-          return { success: false, error: "缺少 content 参数" };
-        }
-
-        // 返回待确认的变更
-        // 使用 toolCallId 作为 PendingChange.id，确保唯一性
-        return {
-          success: true,
-          result: {
-            message: "全文替换待确认",
-            requiresConfirmation: true,
-          },
-          pendingChange: {
-            id: toolCallId,
-            toolCallId,
-            type: "content",
-            operation: "replace_all",
-            oldValue: context.content,
-            newValue: args.content,
-            description: `完全替换文章内容（${context.content.length} 字符 -> ${args.content.length} 字符）`,
-          },
-        };
-      }
-
       default:
         return {
           success: false,

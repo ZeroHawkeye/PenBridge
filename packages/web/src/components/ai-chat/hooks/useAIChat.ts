@@ -115,28 +115,55 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       return tc;
     });
     
-    // 构建工具结果消息
+    // 构建工具结果消息（使用纯文本格式，避免嵌套 JSON 导致的转义问题）
     const toolResultMessages = updatedToolCalls.map(tc => {
       if (tc.status === "failed") {
         return {
           role: "tool" as const,
-          content: JSON.stringify({ 
-            success: false, 
-            error: tc.error || "工具执行失败",
-            toolName: tc.name,
-          }),
+          content: `[错误] ${tc.error || "工具执行失败"}`,
           tool_call_id: tc.id,
         };
       }
-      let resultContent = tc.result || "工具执行完成";
+      
+      // 解析 JSON 结果并转换为纯文本格式
+      let resultContent = "工具执行完成";
       try {
-        const parsed = JSON.parse(resultContent);
-        if (typeof parsed === "object" && parsed !== null && !("success" in parsed)) {
-          resultContent = JSON.stringify({ success: true, ...parsed });
+        const parsed = JSON.parse(tc.result || "{}");
+        
+        // 对于 read_article 工具，直接输出内容
+        if (tc.name === "read_article") {
+          const parts: string[] = [];
+          if (parsed.title !== undefined) {
+            parts.push(`标题: ${parsed.title}`);
+          }
+          if (parsed.totalLines !== undefined) {
+            parts.push(`总行数: ${parsed.totalLines}`);
+          }
+          if (parsed.startLine !== undefined && parsed.endLine !== undefined) {
+            parts.push(`当前范围: 第 ${parsed.startLine} 行 - 第 ${parsed.endLine} 行`);
+          }
+          if (parsed.hasMoreAfter) {
+            parts.push(`提示: 还有更多内容未显示，可使用 startLine 参数继续读取`);
+          }
+          if (parsed.content !== undefined) {
+            parts.push(`\n内容:\n${parsed.content}`);
+          }
+          resultContent = parts.join("\n");
+        } else {
+          // 其他工具：简单格式化输出
+          resultContent = Object.entries(parsed)
+            .map(([key, value]) => {
+              if (typeof value === "object") {
+                return `${key}: ${JSON.stringify(value)}`;
+              }
+              return `${key}: ${value}`;
+            })
+            .join("\n");
         }
       } catch {
-        resultContent = JSON.stringify({ success: true, message: resultContent });
+        resultContent = tc.result || "工具执行完成";
       }
+      
       return {
         role: "tool" as const,
         content: resultContent,
@@ -582,27 +609,65 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
         }
         
         // 构建工具结果消息
+        // 重要：使用纯文本格式而非嵌套 JSON，避免多次 HTTP 传输导致转义字符累积
+        // 
+        // 问题分析：
+        // 1. tc.result 已经是 JSON 字符串（在 executeToolCalls 中 stringify）
+        // 2. 发送到服务器时整个 messages 数组被 stringify（第 2 次）
+        // 3. 服务器转发给 AI API 时再次 stringify（第 3 次）
+        // 4. 每次 stringify 都会转义反斜杠，但解析只能还原一层
+        // 
+        // 解决方案：将 tool result 解析后转换为纯文本格式
         const toolResultMessages = executedToolCalls.map(tc => {
           if (tc.status === "failed") {
+            // 失败消息使用简单文本格式
             return {
               role: "tool" as const,
-              content: JSON.stringify({ 
-                success: false, 
-                error: tc.error || "工具执行失败",
-                toolName: tc.name,
-              }),
+              content: `[错误] ${tc.error || "工具执行失败"}`,
               tool_call_id: tc.id,
             };
           }
-          let resultContent = tc.result || "工具执行完成";
+          
+          // 解析 JSON 结果并转换为纯文本格式
+          let resultContent = "工具执行完成";
           try {
-            const parsed = JSON.parse(resultContent);
-            if (typeof parsed === "object" && parsed !== null && !("success" in parsed)) {
-              resultContent = JSON.stringify({ success: true, ...parsed });
+            const parsed = JSON.parse(tc.result || "{}");
+            
+            // 对于 read_article 工具，直接输出内容（避免嵌套 JSON 导致的转义问题）
+            if (tc.name === "read_article") {
+              const parts: string[] = [];
+              if (parsed.title !== undefined) {
+                parts.push(`标题: ${parsed.title}`);
+              }
+              if (parsed.totalLines !== undefined) {
+                parts.push(`总行数: ${parsed.totalLines}`);
+              }
+              if (parsed.startLine !== undefined && parsed.endLine !== undefined) {
+                parts.push(`当前范围: 第 ${parsed.startLine} 行 - 第 ${parsed.endLine} 行`);
+              }
+              if (parsed.hasMoreAfter) {
+                parts.push(`提示: 还有更多内容未显示，可使用 startLine 参数继续读取`);
+              }
+              if (parsed.content !== undefined) {
+                parts.push(`\n内容:\n${parsed.content}`);
+              }
+              resultContent = parts.join("\n");
+            } else {
+              // 其他工具：简单格式化输出
+              resultContent = Object.entries(parsed)
+                .map(([key, value]) => {
+                  if (typeof value === "object") {
+                    return `${key}: ${JSON.stringify(value)}`;
+                  }
+                  return `${key}: ${value}`;
+                })
+                .join("\n");
             }
           } catch {
-            resultContent = JSON.stringify({ success: true, message: resultContent });
+            // 解析失败，使用原始值
+            resultContent = tc.result || "工具执行完成";
           }
+          
           return {
             role: "tool" as const,
             content: resultContent,

@@ -57,14 +57,6 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     executionLocation: "frontend",
     defaultRequiresApproval: true,
   },
-  {
-    name: "replace_all_content",
-    displayName: "替换全部内容",
-    description: "替换文章的全部内容",
-    type: "write",
-    executionLocation: "frontend",
-    defaultRequiresApproval: true,
-  },
   // ========== 后端工具 ==========
   {
     name: "query_articles",
@@ -171,7 +163,7 @@ export interface PendingChange {
   id: string;
   toolCallId: string;
   type: "title" | "content";
-  operation: "update" | "insert" | "replace" | "replace_all";
+  operation: "update" | "insert" | "replace";
   oldValue: string;
   newValue: string;
   description: string;

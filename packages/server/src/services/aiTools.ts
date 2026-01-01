@@ -141,24 +141,6 @@ export const frontendToolDefinitions: ToolDefinition[] = [
     },
     executionLocation: "frontend",
   },
-  {
-    type: "function",
-    function: {
-      name: "replace_all_content",
-      description: "替换整篇文章内容（用于重写场景）",
-      parameters: {
-        type: "object",
-        properties: {
-          content: {
-            type: "string",
-            description: "新的文章内容（Markdown 格式）",
-          },
-        },
-        required: ["content"],
-      },
-    },
-    executionLocation: "frontend",
-  },
 ];
 
 /**
