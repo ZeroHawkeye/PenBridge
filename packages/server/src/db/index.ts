@@ -11,7 +11,29 @@ import { AIChatSession, AIChatMessage } from "../entities/AIChat";
 // @ts-ignore
 import initSqlJs from "sql.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname, join } from "path";
+
+/**
+ * 获取 sql.js WASM 文件路径
+ * 
+ * 在打包后的环境中，WASM 文件位于可执行文件同目录
+ * 在开发环境中，使用 node_modules 中的文件
+ */
+function getWasmPath(): string | undefined {
+  // 检查是否是 Bun 编译的独立可执行文件
+  // Bun 编译后 process.execPath 指向可执行文件本身
+  const execDir = dirname(process.execPath);
+  const bundledWasmPath = join(execDir, "sql-wasm.wasm");
+  
+  if (existsSync(bundledWasmPath)) {
+    console.log(`[DB] Using bundled WASM: ${bundledWasmPath}`);
+    return bundledWasmPath;
+  }
+  
+  // 开发环境：让 sql.js 自动定位 WASM 文件
+  console.log("[DB] Using default WASM location (development mode)");
+  return undefined;
+}
 
 // 默认数据库路径，可通过 setDatabasePath 修改
 let DB_PATH = "data/pen-bridge.db";
@@ -70,7 +92,16 @@ async function createDataSource(): Promise<DataSource> {
     mkdirSync(dataDir, { recursive: true });
   }
 
-  const driver = await initSqlJs();
+  // 获取 WASM 文件路径（打包环境 vs 开发环境）
+  const wasmPath = getWasmPath();
+  const initOptions: any = {};
+  
+  if (wasmPath) {
+    // 打包环境：指定 WASM 文件路径
+    initOptions.locateFile = () => wasmPath;
+  }
+  
+  const driver = await initSqlJs(initOptions);
   
   return new DataSource({
     type: "sqljs",

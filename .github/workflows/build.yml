@@ -213,6 +213,8 @@ jobs:
           bun build src/index.ts --compile --outfile ../../electron/server/pen-bridge-server-arm64 --target bun-darwin-arm64
           # 复制 prompts 目录
           cp -r src/prompts/* ../../electron/server/prompts/
+          # 复制 sql.js WASM 文件
+          cp node_modules/sql.js/dist/sql-wasm.wasm ../../electron/server/
         working-directory: packages/server
 
       - name: Update Electron package version
@@ -333,6 +335,8 @@ jobs:
           # ARM64 版本将使用 x64 通过 Windows 兼容层运行
           # 复制 prompts 目录
           Copy-Item -Path "src/prompts/*" -Destination "../../electron/server/prompts" -Recurse
+          # 复制 sql.js WASM 文件
+          Copy-Item -Path "node_modules/sql.js/dist/sql-wasm.wasm" -Destination "../../electron/server/"
         working-directory: packages/server
 
       - name: Update Electron package version
@@ -454,6 +458,8 @@ jobs:
           bun build src/index.ts --compile --outfile ../../electron/server/pen-bridge-server-arm64 --target bun-linux-arm64
           # 复制 prompts 目录
           cp -r src/prompts/* ../../electron/server/prompts/
+          # 复制 sql.js WASM 文件
+          cp node_modules/sql.js/dist/sql-wasm.wasm ../../electron/server/
         working-directory: packages/server
 
       - name: Update Electron package version
