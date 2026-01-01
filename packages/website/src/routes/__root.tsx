@@ -6,10 +6,39 @@ import {
   Github,
   Moon,
   Sun,
-  Feather,
   Monitor,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
+
+// PenBridge Logo 组件
+function PenBridgeLogo({ className }: { className?: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 200 200" 
+      className={className}
+      fill="currentColor"
+    >
+      <path 
+        d="M72 150 
+           L72 50 
+           L108 50 
+           Q140 50, 140 82
+           Q140 114, 108 114
+           L92 114 
+           L92 150 
+           L72 150 Z
+           M92 70 
+           L92 94 
+           L106 94 
+           Q120 94, 120 82
+           Q120 70, 106 70
+           L92 70 Z" 
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
 
 type Theme = "light" | "dark" | "system";
 
@@ -36,7 +65,7 @@ function useTheme() {
     const stored = localStorage.getItem("theme") as Theme | null;
     const initialTheme = stored || "system";
     setTheme(initialTheme);
-    
+
     const resolved = initialTheme === "system" ? getSystemTheme() : initialTheme;
     applyTheme(resolved);
   }, [getSystemTheme, applyTheme]);
@@ -111,7 +140,7 @@ function Header() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
             <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Feather className="w-5 h-5 text-primary-foreground" />
+              <PenBridgeLogo className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="font-bold text-xl">PenBridge</span>
           </Link>
@@ -234,7 +263,7 @@ function Footer() {
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Feather className="w-4 h-4 text-primary-foreground" />
+                <PenBridgeLogo className="w-4 h-4 text-primary-foreground" />
               </div>
               <span className="font-bold text-lg">PenBridge</span>
             </div>
@@ -292,7 +321,7 @@ function Footer() {
 
         <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} PenBridge. 开源项目，MIT 许可证。
+            &copy; {new Date().getFullYear()} PenBridge. 开源项目。
           </p>
           <div className="flex items-center gap-4">
             <a

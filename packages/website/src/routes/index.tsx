@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
-  Feather,
   Upload,
   Clock,
   Settings,
@@ -16,6 +15,36 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+
+// PenBridge Logo 组件
+function PenBridgeLogo({ className }: { className?: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 200 200" 
+      className={className}
+      fill="currentColor"
+    >
+      <path 
+        d="M72 150 
+           L72 50 
+           L108 50 
+           Q140 50, 140 82
+           Q140 114, 108 114
+           L92 114 
+           L92 150 
+           L72 150 Z
+           M92 70 
+           L92 94 
+           L106 94 
+           Q120 94, 120 82
+           Q120 70, 106 70
+           L92 70 Z" 
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
 
 // 动画变体
 const fadeInUp = {
@@ -127,7 +156,7 @@ function HeroSection() {
           <div className="relative mx-auto max-w-5xl rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-card">
             <div className="aspect-[16/10] bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
               <div className="text-center p-8">
-                <Feather className="w-16 h-16 text-primary mx-auto mb-4" />
+                <PenBridgeLogo className="w-16 h-16 text-primary mx-auto mb-4" />
                 <p className="text-muted-foreground">应用界面预览</p>
                 <p className="text-sm text-muted-foreground/70 mt-2">
                   沉浸式 Markdown 编辑体验
