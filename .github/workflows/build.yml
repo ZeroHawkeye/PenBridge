@@ -578,6 +578,5 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.rpm
             artifacts/**/*.AppImage
-            artifacts/**/*.yml
-            artifacts/**/*.yaml
+            artifacts/**/latest*.yml
             artifacts/**/*.blockmap
