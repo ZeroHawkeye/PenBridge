@@ -142,29 +142,29 @@ export function TencentAuthSettings() {
               <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : authStatus?.isLoggedIn ? (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 {authStatus.user?.avatarUrl ? (
                   <img
                     src={authStatus.user.avatarUrl}
                     alt="头像"
-                    className="w-14 h-14 rounded-full ring-2 ring-primary/10"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-full ring-2 ring-primary/10 shrink-0"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="h-6 w-6 text-primary" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                   </div>
                 )}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-lg">{authStatus.user?.nickname || "用户"}</p>
-                    <Badge variant="default" className="bg-green-500 hover:bg-green-500">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-base sm:text-lg truncate">{authStatus.user?.nickname || "用户"}</p>
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-500 shrink-0">
                       <CheckCircle className="h-3 w-3 mr-1" />
                       已登录
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     已绑定腾讯云开发者社区
                   </p>
                 </div>
@@ -174,7 +174,7 @@ export function TencentAuthSettings() {
                 size="sm"
                 onClick={() => logoutMutation.mutate()}
                 disabled={logoutMutation.isLoading}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full sm:w-auto"
               >
                 {logoutMutation.isLoading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

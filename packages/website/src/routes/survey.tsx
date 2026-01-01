@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Vote,
   ThumbsUp,
@@ -9,13 +9,15 @@ import {
   Circle,
   Sparkles,
   Users,
-  ArrowUpRight,
   Loader2,
   ExternalLink,
   RefreshCw,
   LogIn,
   LogOut,
   Github,
+  X,
+  Send,
+  Plus,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -42,7 +44,9 @@ interface Feature {
   votes: number;
   status: "voting" | "planned" | "completed";
   category: string;
-  discussionId?: string;
+  discussionId: string;
+  discussionNumber: number;
+  createdAt: string;
 }
 
 // API 响应类型
@@ -73,7 +77,6 @@ const statusConfig = {
 
 // GitHub Discussions URL
 const DISCUSSIONS_URL = "https://github.com/ZeroHawkeye/PenBridge/discussions";
-const NEW_ISSUE_URL = "https://github.com/ZeroHawkeye/PenBridge/issues/new";
 
 function SurveyPage() {
   const [features, setFeatures] = useState<Feature[]>([]);
@@ -82,6 +85,7 @@ function SurveyPage() {
   const [dataSource, setDataSource] = useState<"static" | "github">("static");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // 用户认证状态
   const [user, setUser] = useState<GitHubUser | null>(null);
@@ -90,6 +94,12 @@ function SurveyPage() {
   // 投票状态
   const [votedItems, setVotedItems] = useState<Set<string>>(new Set());
   const [votingItem, setVotingItem] = useState<string | null>(null);
+  
+  // 提交建议弹窗
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestTitle, setSuggestTitle] = useState("");
+  const [suggestDescription, setSuggestDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [filter, setFilter] = useState<"all" | "voting" | "planned" | "completed">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -106,15 +116,12 @@ function SurveyPage() {
         const authData: AuthData = JSON.parse(atob(encodedData));
         setUser(authData.user);
         setUserToken(authData.token);
-        // 保存到 localStorage
         localStorage.setItem("penbridge-auth", JSON.stringify(authData));
-        // 清除 URL hash
         window.history.replaceState(null, "", window.location.pathname);
       } catch (e) {
         console.error("Failed to parse auth data:", e);
       }
     } else {
-      // 从 localStorage 恢复登录状态
       const saved = localStorage.getItem("penbridge-auth");
       if (saved) {
         try {
@@ -127,16 +134,13 @@ function SurveyPage() {
       }
     }
 
-    // 检查 URL 中的错误参数
     const params = new URLSearchParams(window.location.search);
     const errorParam = params.get("error");
     if (errorParam) {
       setError(`登录失败: ${errorParam}`);
-      // 清除 URL 参数
       window.history.replaceState(null, "", window.location.pathname);
     }
 
-    // 恢复投票状态
     const savedVotes = localStorage.getItem("penbridge-votes");
     if (savedVotes) {
       setVotedItems(new Set(JSON.parse(savedVotes)));
@@ -173,12 +177,19 @@ function SurveyPage() {
     fetchFeatures();
   }, [fetchFeatures]);
 
-  // 保存投票状态到 localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("penbridge-votes", JSON.stringify([...votedItems]));
     }
   }, [votedItems]);
+
+  // 自动清除成功消息
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const categories = [...new Set(features.map((f) => f.category))];
 
@@ -191,12 +202,10 @@ function SurveyPage() {
       return b.votes - a.votes;
     });
 
-  // 登录处理
   const handleLogin = () => {
     window.location.href = "/api/auth/github";
   };
 
-  // 登出处理
   const handleLogout = () => {
     setUser(null);
     setUserToken(null);
@@ -206,7 +215,6 @@ function SurveyPage() {
   // 投票处理
   const handleVote = async (featureId: string) => {
     if (!user || !userToken) {
-      // 未登录，提示登录
       setError("请先登录 GitHub 账号后再投票");
       return;
     }
@@ -236,7 +244,6 @@ function SurveyPage() {
         throw new Error(result.message || result.error || "投票失败");
       }
 
-      // 更新本地状态
       if (isVoted) {
         setVotedItems((prev) => {
           const next = new Set(prev);
@@ -247,12 +254,63 @@ function SurveyPage() {
         setVotedItems((prev) => new Set(prev).add(featureId));
       }
 
-      // 刷新数据
+      setSuccessMessage(result.message || "操作成功！");
       await fetchFeatures();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "投票失败");
+      const errorMessage = err instanceof Error ? err.message : "投票失败";
+      // 检测权限不足错误，提示用户重新登录
+      if (errorMessage.includes("scopes") || errorMessage.includes("scope") || errorMessage.includes("权限")) {
+        // 清除旧的登录状态
+        setUser(null);
+        setUserToken(null);
+        localStorage.removeItem("penbridge-auth");
+        setError("登录权限已更新，请重新登录以使用投票功能");
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setVotingItem(null);
+    }
+  };
+
+  // 提交建议
+  const handleSubmitSuggestion = async () => {
+    if (!suggestTitle.trim() || !suggestDescription.trim()) {
+      setError("请填写完整的标题和描述");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/features", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "suggest",
+          title: suggestTitle.trim(),
+          description: suggestDescription.trim(),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || "提交失败");
+      }
+
+      setSuccessMessage("建议提交成功！感谢你的反馈");
+      setShowSuggestModal(false);
+      setSuggestTitle("");
+      setSuggestDescription("");
+      await fetchFeatures();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "提交失败");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -375,60 +433,86 @@ function SurveyPage() {
       {/* 投票列表 */}
       <section className="py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* 筛选器 */}
-          <div className="flex flex-wrap items-center gap-4 mb-8">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">状态:</span>
-              <div className="flex gap-1">
-                {(["all", "voting", "planned", "completed"] as const).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setFilter(status)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                      filter === status
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {status === "all" ? "全部" : statusConfig[status].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {categories.length > 0 && (
+          {/* 筛选器和提交建议按钮 */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">分类:</span>
+                <span className="text-sm text-muted-foreground">状态:</span>
                 <div className="flex gap-1">
-                  <button
-                    onClick={() => setCategoryFilter("all")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                      categoryFilter === "all"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    全部
-                  </button>
-                  {categories.map((cat) => (
+                  {(["all", "voting", "planned", "completed"] as const).map((status) => (
                     <button
-                      key={cat}
-                      onClick={() => setCategoryFilter(cat)}
+                      key={status}
+                      onClick={() => setFilter(status)}
                       className={cn(
                         "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                        categoryFilter === cat
+                        filter === status
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      {cat}
+                      {status === "all" ? "全部" : statusConfig[status].label}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
+              {categories.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">分类:</span>
+                  <div className="flex gap-1 flex-wrap">
+                    <button
+                      onClick={() => setCategoryFilter("all")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                        categoryFilter === "all"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      全部
+                    </button>
+                    {categories.map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setCategoryFilter(cat)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                          categoryFilter === cat
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 提交建议按钮 */}
+            <button
+              onClick={() => setShowSuggestModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              提交建议
+            </button>
           </div>
+
+          {/* 成功消息 */}
+          <AnimatePresence>
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-4 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-center mb-8 flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                {successMessage}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* 加载状态 */}
           {isLoading && (
@@ -453,6 +537,12 @@ function SurveyPage() {
                   立即登录
                 </button>
               )}
+              <button
+                onClick={() => setError(null)}
+                className="ml-2 p-1 rounded hover:bg-destructive/20"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </motion.div>
           )}
 
@@ -500,7 +590,7 @@ function SurveyPage() {
 
                       {/* 内容 */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <h3 className="font-semibold text-lg">{feature.title}</h3>
                           <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium", status.color)}>
                             {status.label}
@@ -549,7 +639,7 @@ function SurveyPage() {
             </motion.div>
           )}
 
-          {/* 提交建议 */}
+          {/* 提交建议区域 */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -559,18 +649,16 @@ function SurveyPage() {
             <MessageSquare className="w-12 h-12 text-primary mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">有新的功能建议？</h3>
             <p className="text-muted-foreground mb-6">
-              欢迎在 GitHub Issues 中提出你的想法，或参与社区讨论
+              直接在这里提交你的想法，或参与社区讨论
             </p>
             <div className="flex items-center justify-center gap-4">
-              <a
-                href={NEW_ISSUE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => setShowSuggestModal(true)}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
               >
+                <Plus className="w-4 h-4" />
                 提交建议
-                <ArrowUpRight className="w-4 h-4" />
-              </a>
+              </button>
               <a
                 href={DISCUSSIONS_URL}
                 target="_blank"
@@ -606,115 +694,151 @@ function SurveyPage() {
           </div>
         </div>
       </section>
+
+      {/* 提交建议弹窗 */}
+      <AnimatePresence>
+        {showSuggestModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            onClick={() => setShowSuggestModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-card rounded-2xl border border-border shadow-xl"
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold">提交功能建议</h2>
+                  <button
+                    onClick={() => setShowSuggestModal(false)}
+                    className="p-2 rounded-lg hover:bg-muted transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      功能标题 <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={suggestTitle}
+                      onChange={(e) => setSuggestTitle(e.target.value)}
+                      placeholder="简短描述你想要的功能"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      maxLength={100}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      详细描述 <span className="text-destructive">*</span>
+                    </label>
+                    <textarea
+                      value={suggestDescription}
+                      onChange={(e) => setSuggestDescription(e.target.value)}
+                      placeholder="描述这个功能的使用场景和预期效果..."
+                      rows={5}
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                      maxLength={1000}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {suggestDescription.length}/1000
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setShowSuggestModal(false)}
+                    className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSubmitSuggestion}
+                    disabled={isSubmitting || !suggestTitle.trim() || !suggestDescription.trim()}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    提交建议
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // 静态功能数据（备用）
 function getStaticFeatures(): FeaturesResponse {
+  const now = new Date().toISOString();
   const features: Feature[] = [
     {
-      id: "csdn",
-      title: "CSDN 平台支持",
-      description: "支持一键发布文章到 CSDN 博客平台",
-      votes: 156,
-      status: "voting",
-      category: "平台支持",
-    },
-    {
-      id: "segmentfault",
-      title: "思否平台支持",
-      description: "支持一键发布文章到思否社区",
-      votes: 89,
-      status: "voting",
-      category: "平台支持",
-    },
-    {
-      id: "zhihu",
-      title: "知乎专栏支持",
-      description: "支持发布文章到知乎专栏",
-      votes: 234,
-      status: "voting",
-      category: "平台支持",
-    },
-    {
-      id: "cnblogs",
-      title: "博客园支持",
-      description: "支持发布文章到博客园",
-      votes: 67,
-      status: "voting",
-      category: "平台支持",
-    },
-    {
-      id: "wechat",
-      title: "微信公众号支持",
-      description: "支持发布文章到微信公众号",
-      votes: 312,
-      status: "planned",
-      category: "平台支持",
-    },
-    {
-      id: "image-hosting",
+      id: "static-1",
       title: "更多图床支持",
       description: "支持七牛云、阿里云 OSS、GitHub 等更多图床",
-      votes: 145,
+      votes: 0,
       status: "voting",
       category: "功能增强",
+      discussionId: "",
+      discussionNumber: 0,
+      createdAt: now,
     },
     {
-      id: "templates",
-      title: "文章模板",
-      description: "预设多种文章模板，快速开始写作",
-      votes: 78,
+      id: "static-2",
+      title: "知乎专栏支持",
+      description: "支持发布文章到知乎专栏",
+      votes: 0,
       status: "voting",
-      category: "功能增强",
+      category: "平台支持",
+      discussionId: "",
+      discussionNumber: 0,
+      createdAt: now,
     },
     {
-      id: "statistics",
-      title: "数据统计",
-      description: "统计各平台文章阅读量、点赞数等数据",
-      votes: 198,
-      status: "voting",
-      category: "功能增强",
-    },
-    {
-      id: "sync",
-      title: "云同步",
-      description: "支持多设备数据同步（可选功能）",
-      votes: 167,
-      status: "voting",
-      category: "功能增强",
-    },
-    {
-      id: "export",
-      title: "批量导出",
-      description: "支持批量导出文章为 PDF、Word 等格式",
-      votes: 112,
-      status: "voting",
-      category: "功能增强",
-    },
-    {
-      id: "tencent-cloud",
+      id: "static-3",
       title: "腾讯云开发者社区",
       description: "已支持发布到腾讯云开发者社区",
       votes: 0,
       status: "completed",
       category: "平台支持",
+      discussionId: "",
+      discussionNumber: 0,
+      createdAt: now,
     },
     {
-      id: "juejin",
+      id: "static-4",
       title: "掘金平台",
       description: "已支持发布到掘金技术社区",
       votes: 0,
       status: "completed",
       category: "平台支持",
+      discussionId: "",
+      discussionNumber: 0,
+      createdAt: now,
     },
   ];
 
   return {
     features,
     totalVotes: features.reduce((sum, f) => sum + f.votes, 0),
-    totalParticipants: 423,
+    totalParticipants: 0,
     source: "static",
   };
 }

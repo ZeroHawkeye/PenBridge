@@ -13,6 +13,7 @@ import {
   PanelRight,
   Bot,
   Search,
+  MoreHorizontal,
 } from "lucide-react";
 import { Drawer } from "antd";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import MilkdownEditor, { type MilkdownEditorRef } from "@/components/MilkdownEditor";
 import { TableOfContents, HeadingItem } from "@/components/TableOfContents";
 import { EditorSearchBox } from "@/components/EditorSearchBox";
@@ -32,6 +40,7 @@ import { EditorSkeleton } from "@/components/EditorSkeleton";
 import { SettingItem } from "@/components/SettingItem";
 import { countWords, formatWordCountDetail } from "@/utils/wordCount";
 import { AIChatPanel } from "@/components/ai-chat/AIChatPanel";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // 编辑器宽度设置
 const WIDTH_STORAGE_KEY = "editor-fullwidth-preference";
@@ -101,7 +110,10 @@ export function ArticleEditorLayout({
   articleId,
 }: ArticleEditorLayoutProps) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileTocOpen, setMobileTocOpen] = useState(false);
+  const [mobileAIOpen, setMobileAIOpen] = useState(false);
   const [isFullWidth, setIsFullWidth] = useState(() => {
     const saved = localStorage.getItem(WIDTH_STORAGE_KEY);
     return saved === "true";
@@ -381,83 +393,114 @@ export function ArticleEditorLayout({
   return (
     <div className="flex flex-col h-full bg-background relative">
       {/* 顶部工具栏 - 简洁风格 */}
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-2 md:px-4 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
+        <div className="flex items-center gap-1 md:gap-2 min-w-0">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-8 w-8 shrink-0"
             onClick={() => navigate({ to: "/articles" })}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center text-sm text-muted-foreground">
-            <span>文章</span>
-            <ChevronRight className="h-3 w-3 mx-1" />
-            <span className="text-foreground truncate max-w-[200px]">
+          <div className="flex items-center text-sm text-muted-foreground min-w-0">
+            <span className="hidden md:inline">文章</span>
+            <ChevronRight className="h-3 w-3 mx-1 hidden md:inline" />
+            <span className="text-foreground truncate max-w-[100px] md:max-w-[200px]">
               {breadcrumbLabel}
             </span>
           </div>
-          {isPublished && (
-            <Badge variant="default" className="ml-2">
+          {isPublished && !isMobile && (
+            <Badge variant="default" className="ml-1 md:ml-2 shrink-0">
               已发布
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           {/* 状态指示器（如保存状态） */}
-          {statusIndicator}
+          <span className="hidden md:inline-flex">{statusIndicator}</span>
 
           {/* 操作按钮区域 */}
           {actionButtons}
 
-          {/* 搜索按钮 */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={isSearchOpen ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setIsSearchOpen(!isSearchOpen)}
-                >
-                  <Search className="h-4 w-4" />
+          {/* 移动端：更多操作菜单 */}
+          {isMobile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                搜索 (Ctrl+F)
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setIsSearchOpen(!isSearchOpen)}>
+                  <Search className="h-4 w-4 mr-2" />
+                  搜索
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMobileTocOpen(true)}>
+                  <List className="h-4 w-4 mr-2" />
+                  目录
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMobileAIOpen(true)}>
+                  <Bot className="h-4 w-4 mr-2" />
+                  AI 助手
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  设置
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              {/* 桌面端：搜索按钮 */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={isSearchOpen ? "secondary" : "ghost"}
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setIsSearchOpen(!isSearchOpen)}
+                    >
+                      <Search className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    搜索 (Ctrl+F)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-          {/* AI 助手按钮 */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={isAIPanelOpen ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
-                >
-                  <Bot className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isAIPanelOpen ? "关闭 AI 助手" : "打开 AI 助手"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              {/* 桌面端：AI 助手按钮 */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={isAIPanelOpen ? "secondary" : "ghost"}
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
+                    >
+                      <Bot className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isAIPanelOpen ? "关闭 AI 助手" : "打开 AI 助手"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-          {/* 设置按钮 - 放在最右侧 */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings2 className="h-4 w-4" />
-          </Button>
+              {/* 桌面端：设置按钮 */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
       
@@ -620,7 +663,7 @@ export function ArticleEditorLayout({
               <TooltipTrigger asChild>
                 <div 
                   className="fixed bottom-4 px-3 py-1.5 bg-muted/80 backdrop-blur-sm rounded-full text-xs text-muted-foreground cursor-default select-none shadow-sm border transition-all"
-                  style={{ right: getRightSidebarWidth() + 20 + "px" }}
+                  style={{ right: isMobile ? 16 : getRightSidebarWidth() + 20 + "px" }}
                 >
                   {totalWords} 字
                 </div>
@@ -637,8 +680,47 @@ export function ArticleEditorLayout({
           </TooltipProvider>
         </div>
 
-        {/* 标题目录侧边栏 */}
-        {showToc && (
+        {/* 移动端：目录抽屉 */}
+        {isMobile && (
+          <Sheet open={mobileTocOpen} onOpenChange={setMobileTocOpen}>
+            <SheetContent side="right" className="w-72 p-0">
+              <SheetHeader className="border-b px-4 py-3">
+                <SheetTitle className="flex items-center gap-2">
+                  <List className="h-4 w-4" />
+                  目录
+                </SheetTitle>
+              </SheetHeader>
+              <TableOfContents
+                content={content}
+                className="flex-1 overflow-hidden"
+                onHeadingClick={(heading) => {
+                  handleHeadingClick(heading);
+                  setMobileTocOpen(false);
+                }}
+              />
+            </SheetContent>
+          </Sheet>
+        )}
+
+        {/* 移动端：AI 助手抽屉 */}
+        {isMobile && (
+          <Sheet open={mobileAIOpen} onOpenChange={setMobileAIOpen}>
+            <SheetContent side="right" className="w-full sm:w-96 p-0 h-full flex flex-col">
+              <AIChatPanel
+                isOpen={mobileAIOpen}
+                onClose={() => setMobileAIOpen(false)}
+                articleContext={articleContext}
+                toolContext={toolContext}
+                width={375}
+                onWidthChange={() => {}}
+                isMobile={true}
+              />
+            </SheetContent>
+          </Sheet>
+        )}
+
+        {/* 桌面端：标题目录侧边栏 */}
+        {!isMobile && showToc && (
           <div 
             className="border-l bg-muted/20 shrink-0 flex flex-col relative overflow-hidden"
             style={{ width: `${tocWidth}px` }}
@@ -681,8 +763,8 @@ export function ArticleEditorLayout({
           </div>
         )}
 
-        {/* AI 聊天侧边栏 */}
-        {isAIPanelOpen && (
+        {/* 桌面端：AI 聊天侧边栏 */}
+        {!isMobile && isAIPanelOpen && (
           <AIChatPanel
             isOpen={isAIPanelOpen}
             onClose={handleCloseAIPanel}
@@ -693,8 +775,8 @@ export function ArticleEditorLayout({
           />
         )}
 
-        {/* 目录折叠状态下的展开按钮 */}
-        {!showToc && (
+        {/* 桌面端：目录折叠状态下的展开按钮 */}
+        {!isMobile && !showToc && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

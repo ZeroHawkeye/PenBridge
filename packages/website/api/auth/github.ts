@@ -17,10 +17,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const redirectUri = `${protocol}://${host}/api/auth/callback`;
 
   // 构建 GitHub OAuth 授权 URL
+  // 需要 public_repo scope 来对 Discussions 添加 reactions（投票）
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
     redirect_uri: redirectUri,
-    scope: "read:user", // 只需要读取用户信息，投票通过 GraphQL API 使用服务端 token
+    scope: "read:user public_repo",
     state: Math.random().toString(36).substring(7), // 防止 CSRF
   });
 

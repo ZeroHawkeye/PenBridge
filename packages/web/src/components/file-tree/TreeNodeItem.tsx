@@ -42,6 +42,8 @@ interface TreeNodeItemProps {
   onDragLeave: () => void;
   onDrop: (target: DropTarget) => void;
   allFolders: FolderItem[];
+  /** 文章点击回调，用于移动端关闭侧边栏 */
+  onArticleClick?: () => void;
 }
 
 /**
@@ -69,6 +71,7 @@ export function TreeNodeItem({
   onDragLeave,
   onDrop,
   allFolders,
+  onArticleClick,
 }: TreeNodeItemProps) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -301,6 +304,7 @@ export function TreeNodeItem({
                   onDragLeave={onDragLeave}
                   onDrop={onDrop}
                   allFolders={allFolders}
+                  onArticleClick={onArticleClick}
                 />
               ))
             )}
@@ -320,6 +324,7 @@ export function TreeNodeItem({
           onDragEnd={handleDragEnd}
           to="/articles/$id/edit"
           params={{ id: String(node.id) }}
+          onClick={onArticleClick}
           className={cn(
             "flex items-center w-full px-2 py-1 text-sm hover:bg-accent rounded-sm group",
             "transition-colors text-foreground overflow-hidden",

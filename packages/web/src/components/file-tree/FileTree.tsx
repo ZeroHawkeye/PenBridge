@@ -24,11 +24,16 @@ import { TreeNodeItem } from "./TreeNodeItem";
 import { buildTree } from "./utils";
 import type { DragData, DropTarget, DeleteTarget } from "./types";
 
+interface FileTreeProps {
+  /** 文章点击回调，用于移动端关闭侧边栏 */
+  onArticleClick?: () => void;
+}
+
 /**
  * 主文件树组件
  * 显示文章和文件夹的树形结构，支持拖拽、创建、重命名、删除等操作
  */
-export function FileTree() {
+export function FileTree({ onArticleClick }: FileTreeProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(
@@ -386,6 +391,7 @@ export function FileTree() {
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                     allFolders={data?.folders || []}
+                    onArticleClick={onArticleClick}
                   />
                 ))
               )}

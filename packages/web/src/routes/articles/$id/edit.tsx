@@ -143,7 +143,11 @@ function EditArticlePage() {
     }
     // 立即执行保存
     await doSave(title, content, summary);
-  }, [doSave, title, content, summary]);
+    // 手动保存成功时显示提示
+    if (!updateMutation.isError) {
+      message.success("保存成功");
+    }
+  }, [doSave, title, content, summary, updateMutation.isError]);
 
   // Ctrl+S 快捷键保存
   useEffect(() => {

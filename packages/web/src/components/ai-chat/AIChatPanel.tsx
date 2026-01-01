@@ -44,7 +44,8 @@ export function AIChatPanel({
   toolContext,
   width: externalWidth,
   onWidthChange,
-}: AIChatPanelProps) {
+  isMobile = false,
+}: AIChatPanelProps & { isMobile?: boolean }) {
   // 状态
   const [inputValue, setInputValue] = useState("");
   const [internalWidth, setInternalWidth] = useState(externalWidth || DEFAULT_WIDTH);
@@ -233,14 +234,19 @@ export function AIChatPanel({
     <>
     <div
       ref={panelRef}
-      className="border-l bg-background shrink-0 flex flex-col relative overflow-hidden"
-      style={{ width: `${width}px` }}
+      className={cn(
+        "bg-background flex flex-col relative overflow-hidden",
+        isMobile ? "h-full w-full" : "border-l shrink-0"
+      )}
+      style={isMobile ? undefined : { width: `${width}px` }}
     >
-      {/* 拖拽调整宽度的手柄 */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
-        onMouseDown={handleMouseDown}
-      />
+      {/* 拖拽调整宽度的手柄 - 仅桌面端显示 */}
+      {!isMobile && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
+          onMouseDown={handleMouseDown}
+        />
+      )}
       
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">

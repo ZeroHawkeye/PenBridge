@@ -1,9 +1,13 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { useState } from "react";
 import { z } from "zod";
-import { Cloud, Info, Mail, Calendar, Users, Key, Server, PenLine, Sparkles, Bot, Database } from "lucide-react";
+import { Cloud, Info, Mail, Calendar, Users, Key, Server, PenLine, Sparkles, Bot, Database, ChevronRight } from "lucide-react";
 import { isSuperAdmin } from "@/utils/auth";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // 导入设置组件
 import {
@@ -82,6 +86,8 @@ function SettingsPage() {
   const navigate = useNavigate();
   const { tab } = useSearch({ from: "/settings" });
   const activeTab = tab || "tencent";
+  const isMobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleTabChange = (tabId: string) => {
     navigate({
@@ -89,48 +95,101 @@ function SettingsPage() {
       search: { tab: tabId as "server" | "tencent" | "juejin" | "email" | "schedule" | "users" | "account" | "editor" | "about" | "ai" | "data" },
       replace: true,
     });
+    // 移动端选择后关闭菜单
+    if (isMobile) {
+      setMenuOpen(false);
+    }
   };
 
   const menuGroups = getSettingsMenu();
 
-  return (
-    <div className="flex h-full">
-      {/* 设置侧边菜单 */}
-      <div className="w-48 border-r border-border bg-muted/30 shrink-0">
-        <div className="p-4">
-          <h1 className="text-lg font-semibold">设置</h1>
+  // 获取当前选中项的标签
+  const getCurrentTabLabel = () => {
+    for (const group of menuGroups) {
+      for (const item of group.items) {
+        if (item.id === activeTab) {
+          return item.label;
+        }
+      }
+    }
+    return "设置";
+  };
+
+  // 设置菜单内容（桌面端和移动端共用）
+  const SettingsMenu = () => (
+    <nav className={cn("space-y-4", isMobile ? "px-4 py-2" : "px-2 pb-4")}>
+      {menuGroups.map((group) => (
+        <div key={group.title}>
+          <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {group.title}
+          </div>
+          <div className="space-y-0.5">
+            {group.items.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={cn(
+                  "flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md transition-colors",
+                  activeTab === item.id
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <nav className="px-2 pb-4 space-y-4">
-          {menuGroups.map((group) => (
-            <div key={group.title}>
-              <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {group.title}
-              </div>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleTabChange(item.id)}
-                    className={cn(
-                      "flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md transition-colors",
-                      activeTab === item.id
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </div>
+      ))}
+    </nav>
+  );
+
+  return (
+    <div className="flex flex-col md:flex-row h-full">
+      {/* 移动端：顶部菜单栏 */}
+      {isMobile && (
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-background shrink-0">
+          <h1 className="text-lg font-semibold">设置</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setMenuOpen(true)}
+          >
+            {getCurrentTabLabel()}
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* 移动端：菜单抽屉 */}
+      {isMobile && (
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <SheetContent side="right" className="w-64 p-0">
+            <SheetHeader className="border-b px-4 py-3">
+              <SheetTitle>设置菜单</SheetTitle>
+            </SheetHeader>
+            <ScrollArea className="h-[calc(100vh-60px)]">
+              <SettingsMenu />
+            </ScrollArea>
+          </SheetContent>
+        </Sheet>
+      )}
+
+      {/* 桌面端：侧边菜单 */}
+      {!isMobile && (
+        <div className="w-48 border-r border-border bg-muted/30 shrink-0">
+          <div className="p-4">
+            <h1 className="text-lg font-semibold">设置</h1>
+          </div>
+          <SettingsMenu />
+        </div>
+      )}
 
       {/* 设置内容 */}
       <ScrollArea className="flex-1">
-        <div className="p-6 max-w-2xl">
+        <div className={cn("p-4 md:p-6 max-w-2xl", isMobile && "pb-20")}>
           {activeTab === "server" && <ServerConfigSettings />}
           {activeTab === "tencent" && <TencentAuthSettings />}
           {activeTab === "juejin" && <JuejinAuthSettings />}
