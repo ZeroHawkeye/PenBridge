@@ -29,9 +29,7 @@ import {
   ArticleStatusCount,
 } from "./tencentApi";
 import { processArticleImages, hasImagesToUpload } from "./imageUpload";
-
-// 图片上传目录（与 index.ts 保持一致）
-const UPLOAD_DIR = path.resolve("data/uploads");
+import { getUploadDir } from "./dataDir";
 
 // 同步结果
 export interface SyncResult {
@@ -122,7 +120,7 @@ export class ArticleSyncService {
           const { content: processedContent, results } = await processArticleImages(
             article.content,
             client,
-            UPLOAD_DIR
+            path.resolve(getUploadDir())
           );
           contentToSync = processedContent;
 
@@ -245,7 +243,7 @@ export class ArticleSyncService {
           const { content: processedContent, results } = await processArticleImages(
             article.content,
             client,
-            UPLOAD_DIR
+            path.resolve(getUploadDir())
           );
           contentToPublish = processedContent;
 

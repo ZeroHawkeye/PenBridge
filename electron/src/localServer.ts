@@ -113,7 +113,7 @@ async function waitForServerReady(url: string, maxRetries: number = 60): Promise
     try {
       const response = await fetch(`${url}/health`, {
         method: "GET",
-        signal: AbortSignal.timeout(2000),
+        signal: AbortSignal.timeout(1000),
       });
       
       if (response.ok) {
@@ -126,8 +126,8 @@ async function waitForServerReady(url: string, maxRetries: number = 60): Promise
       // 忽略错误，继续重试
     }
     
-    // 等待 500ms 后重试
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // 等待 100ms 后重试（加快轮询频率）
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   
   return false;

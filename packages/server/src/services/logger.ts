@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, appendFileSync, readdirSync, unlinkSync, statSync } from "fs";
 import { join } from "path";
+import { getLogDir as getLogDirFromConfig } from "./dataDir";
 
-// 日志目录
-const LOG_DIR = "data/logs";
+// 日志目录（延迟初始化）
+let LOG_DIR = "";
 
 // 日志文件保留天数
 const LOG_RETENTION_DAYS = 7;
@@ -214,6 +215,9 @@ export function initLogger(): void {
     originalConsole.warn("[Logger] 日志服务已经初始化，跳过重复初始化");
     return;
   }
+  
+  // 初始化日志目录路径（根据环境变量）
+  LOG_DIR = getLogDirFromConfig();
   
   // 确保日志目录存在
   if (!ensureLogDir()) {

@@ -244,20 +244,24 @@ function SetupPage() {
   // 模式选择页面
   if (step === "mode-select") {
     return (
-      <div className="flex h-full items-center justify-center p-4">
+      <div className="flex h-full flex-col">
+        {/* 返回按钮区域 - 固定在顶部 */}
+        {reconfigure && (
+          <div className="shrink-0 p-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-500 hover:text-slate-700"
+              onClick={() => navigate({ to: "/login" })}
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              返回登录
+            </Button>
+          </div>
+        )}
+        <div className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-2xl">
           <div className="text-center mb-8">
-            {reconfigure && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute left-4 top-4 text-slate-500 hover:text-slate-700"
-                onClick={() => navigate({ to: "/login" })}
-              >
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                返回登录
-              </Button>
-            )}
             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
               <Server className="h-10 w-10 text-primary" />
             </div>
@@ -407,6 +411,7 @@ function SetupPage() {
               <span>{testResult.message}</span>
             </div>
           )}
+        </div>
         </div>
       </div>
     );

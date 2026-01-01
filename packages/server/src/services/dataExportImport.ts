@@ -31,11 +31,11 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypt
 import * as fs from "fs";
 import * as path from "path";
 import JSZip from "jszip";
+import { getUploadDir } from "./dataDir";
 
 // 当前数据格式版本
 const DATA_FORMAT_VERSION = "1.0.0";
 const APP_VERSION = "1.0.0"; // TODO: 从 package.json 读取
-const UPLOAD_DIR = path.resolve("data/uploads");
 
 /**
  * 加密工具函数
@@ -745,8 +745,8 @@ export async function importData(
     // 导入图片数据
     if (options.importImages && data.images && data.images.length > 0) {
       // 确保上传目录存在
-      if (!fs.existsSync(UPLOAD_DIR)) {
-        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      if (!fs.existsSync(getUploadDir())) {
+        fs.mkdirSync(getUploadDir(), { recursive: true });
       }
 
       for (const imageData of data.images) {
@@ -755,7 +755,7 @@ export async function importData(
           const mappedArticleId = articleIdMap.get(imageData.articleId) || imageData.articleId;
           
           // 创建文章图片目录
-          const articleDir = path.join(UPLOAD_DIR, String(mappedArticleId));
+          const articleDir = path.join(getUploadDir(), String(mappedArticleId));
           if (!fs.existsSync(articleDir)) {
             fs.mkdirSync(articleDir, { recursive: true });
           }
@@ -883,11 +883,11 @@ export function getImageStats(): { count: number; totalSize: number } {
   let count = 0;
   let totalSize = 0;
 
-  if (fs.existsSync(UPLOAD_DIR)) {
-    const articleDirs = fs.readdirSync(UPLOAD_DIR);
+  if (fs.existsSync(getUploadDir())) {
+    const articleDirs = fs.readdirSync(getUploadDir());
 
     for (const articleIdStr of articleDirs) {
-      const articleDir = path.join(UPLOAD_DIR, articleIdStr);
+      const articleDir = path.join(getUploadDir(), articleIdStr);
       try {
         const stat = fs.statSync(articleDir);
         if (stat.isDirectory()) {
@@ -929,14 +929,14 @@ export async function exportDataToZip(options: ExportOptions): Promise<Buffer> {
 
   // 2. 如果需要导出图片，将图片文件添加到 ZIP
   if (options.includeImages && options.includeArticles) {
-    if (fs.existsSync(UPLOAD_DIR)) {
-      const articleDirs = fs.readdirSync(UPLOAD_DIR);
+    if (fs.existsSync(getUploadDir())) {
+      const articleDirs = fs.readdirSync(getUploadDir());
 
       for (const articleIdStr of articleDirs) {
         const articleId = parseInt(articleIdStr, 10);
         if (isNaN(articleId)) continue;
 
-        const articleDir = path.join(UPLOAD_DIR, articleIdStr);
+        const articleDir = path.join(getUploadDir(), articleIdStr);
         try {
           const stat = fs.statSync(articleDir);
           if (stat.isDirectory()) {
@@ -1039,8 +1039,8 @@ export async function importDataFromZip(
     // 4. 如果需要导入图片，从 ZIP 中提取并保存
     if (options.importImages) {
       // 确保上传目录存在
-      if (!fs.existsSync(UPLOAD_DIR)) {
-        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      if (!fs.existsSync(getUploadDir())) {
+        fs.mkdirSync(getUploadDir(), { recursive: true });
       }
 
       // 从 importData 结果中获取文章 ID 映射
@@ -1076,7 +1076,7 @@ export async function importDataFromZip(
           const newArticleId = articleIdMap.get(oldArticleId) || oldArticleId;
 
           // 创建目标目录
-          const targetDir = path.join(UPLOAD_DIR, String(newArticleId));
+          const targetDir = path.join(getUploadDir(), String(newArticleId));
           if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true });
           }

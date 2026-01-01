@@ -6,16 +6,17 @@ import { Hono } from "hono";
 import { mkdirSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
-
-// 默认上传目录路径
-const DEFAULT_UPLOAD_DIR = "data/uploads";
+import { getUploadDir } from "../services/dataDir";
 
 /**
  * 工厂函数：创建带自定义上传目录的路由
- * @param uploadDir 上传目录路径，默认为 "data/uploads"
+ * @param uploadDir 上传目录路径，如果不指定则使用动态数据目录
  */
-export function createUploadRouter(uploadDir: string = DEFAULT_UPLOAD_DIR) {
+export function createUploadRouter(uploadDir?: string) {
   const router = new Hono();
+
+  // 获取上传目录（延迟获取以支持动态环境变量）
+  const getUploadPath = () => uploadDir || getUploadDir();
 
   /**
    * 图片上传 API
@@ -53,7 +54,8 @@ export function createUploadRouter(uploadDir: string = DEFAULT_UPLOAD_DIR) {
       }
 
       // 按文章 ID 创建目录
-      const articleDir = join(uploadDir, articleId);
+      const currentUploadDir = getUploadPath();
+      const articleDir = join(currentUploadDir, articleId);
       if (!existsSync(articleDir)) {
         mkdirSync(articleDir, { recursive: true });
       }
@@ -85,10 +87,11 @@ export const uploadRouter = createUploadRouter();
 
 /**
  * 确保上传目录存在
- * @param uploadDir 上传目录路径，默认为 "data/uploads"
+ * @param uploadDir 上传目录路径，如果不指定则使用动态数据目录
  */
-export function ensureUploadDir(uploadDir: string = DEFAULT_UPLOAD_DIR) {
-  if (!existsSync(uploadDir)) {
-    mkdirSync(uploadDir, { recursive: true });
+export function ensureUploadDir(uploadDir?: string) {
+  const dir = uploadDir || getUploadDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
   }
 }

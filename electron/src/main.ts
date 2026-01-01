@@ -48,11 +48,21 @@ function createMainWindow() {
       spellcheck: false, // 禁用 Chromium 内置拼写检查，使用自定义实现
     },
     title: "PenBridge",
-    backgroundColor: "#f3f3f3", // 浅色背景
+    backgroundColor: "#ffffff", // 白色背景，减少视觉闪烁
   });
 
+  // 备用：如果 2 秒内没有触发 did-finish-load，强制显示窗口
+  const showTimeout = setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      console.log("[App] 强制显示窗口（超时）");
+      mainWindow.show();
+    }
+  }, 2000);
+  
   // 页面加载完成后显示窗口，避免白屏
-  mainWindow.once("ready-to-show", () => {
+  // 使用 did-finish-load 比 ready-to-show 更快触发
+  mainWindow.webContents.once("did-finish-load", () => {
+    clearTimeout(showTimeout); // 清除超时定时器
     mainWindow?.show();
   });
 
@@ -546,9 +556,7 @@ app.whenReady().then(async () => {
   registerAppModeHandlers();
   registerIpcHandlers();
   
-  // 初始化应用模式（本地模式下启动服务器）
-  await initializeAppMode();
-  
+  // 先创建窗口，让用户看到界面（避免等待服务器启动）
   createMainWindow();
   setupWindowEvents();
 
@@ -556,6 +564,12 @@ app.whenReady().then(async () => {
   if (mainWindow) {
     initAutoUpdater(mainWindow);
   }
+  
+  // 异步初始化应用模式（本地模式下启动服务器）
+  // 不阻塞窗口显示
+  initializeAppMode().catch((err) => {
+    console.error("[App] 初始化应用模式失败:", err);
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -28,8 +28,8 @@ asarUnpack:
 # Windows 配置
 win:
   icon: assets/icon.ico
-  # 统一 Windows 安装包命名格式，避免生成重复文件
-  artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
+  # 统一 Windows 安装包命名格式，包含平台标识 win
+  artifactName: "${productName}-${version}-win-${arch}.${ext}"
   target:
     - target: nsis
       arch:
@@ -94,6 +94,8 @@ nsis:
 mac:
   icon: assets/icon.icns
   category: public.app-category.productivity
+  # 统一 macOS 安装包命名格式，包含平台标识 mac
+  artifactName: "${productName}-${version}-mac-${arch}.${ext}"
   target:
     - target: dmg
       arch:
@@ -104,8 +106,8 @@ mac:
 linux:
   icon: assets
   category: Office
-  # 统一 Linux 安装包命名格式
-  artifactName: "${productName}-${version}-${arch}.${ext}"
+  # 统一 Linux 安装包命名格式，包含平台标识 linux
+  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
   target:
     - target: AppImage
       arch:

@@ -3,10 +3,11 @@ import { cors } from "hono/cors";
 import { trpcServer } from "@hono/trpc-server";
 import { serveStatic } from "hono/bun";
 import { appRouter } from "./trpc/router";
-import { initDatabase } from "./db";
+import { initDatabase, setDatabasePath } from "./db";
 import { schedulerService } from "./services/scheduler";
 import { initializeSuperAdmin, cleanupExpiredSessions } from "./services/adminAuth";
 import { initLogger } from "./services/logger";
+import { getDataDir, getUploadDir, getDatabasePath } from "./services/dataDir";
 import { mkdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 
@@ -32,9 +33,6 @@ const serverHost = process.env.PEN_BRIDGE_HOST || DEFAULT_HOST;
 const PUBLIC_DIR = "public";
 
 const app = new Hono();
-
-// 上传目录路径
-const UPLOAD_DIR = "data/uploads";
 
 // CORS - 允许 Electron 应用、开发服务器和生产部署
 app.use(
@@ -82,7 +80,8 @@ app.get("/health", (c) => c.json({ status: "ok", message: "PenBridge Server" }))
 app.get("/api", (c) => c.json({ status: "ok", message: "PenBridge API" }));
 
 // 静态文件服务 - 提供上传的图片访问
-app.use("/uploads/*", serveStatic({ root: "./data" }));
+// 使用动态数据目录路径
+app.use("/uploads/*", serveStatic({ root: getDataDir() }));
 
 // 挂载拆分后的路由
 app.route("/api/upload", uploadRouter);
@@ -139,15 +138,21 @@ if (existsSync(PUBLIC_DIR)) {
 
 // 初始化
 async function main() {
-  // 确保 data 目录存在
-  if (!existsSync("data")) {
-    mkdirSync("data", { recursive: true });
+  const dataDir = getDataDir();
+  const uploadDir = getUploadDir();
+  
+  // 确保数据目录存在
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
   }
 
   // 确保上传目录存在
-  if (!existsSync(UPLOAD_DIR)) {
-    mkdirSync(UPLOAD_DIR, { recursive: true });
+  if (!existsSync(uploadDir)) {
+    mkdirSync(uploadDir, { recursive: true });
   }
+
+  // 设置数据库路径（使用动态数据目录）
+  setDatabasePath(getDatabasePath());
 
   // 初始化数据库
   await initDatabase();

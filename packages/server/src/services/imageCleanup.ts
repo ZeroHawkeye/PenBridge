@@ -1,8 +1,6 @@
 import { existsSync, readdirSync, unlinkSync, rmdirSync } from "fs";
 import { join } from "path";
-
-// 上传目录
-const UPLOAD_DIR = "data/uploads";
+import { getUploadDir } from "./dataDir";
 
 /**
  * 从文章内容中提取所有引用的图片文件名
@@ -37,7 +35,7 @@ function extractReferencedImages(content: string, articleId: number): Set<string
  * 获取文章上传目录中的所有文件
  */
 function getUploadedFiles(articleId: number): string[] {
-  const articleDir = join(UPLOAD_DIR, String(articleId));
+  const articleDir = join(getUploadDir(), String(articleId));
   
   if (!existsSync(articleDir)) {
     return [];
@@ -76,7 +74,7 @@ export async function cleanupUnusedImages(
     return result;
   }
 
-  const articleDir = join(UPLOAD_DIR, String(articleId));
+  const articleDir = join(getUploadDir(), String(articleId));
 
   for (const filename of uploadedFiles) {
     if (referencedImages.has(filename)) {
@@ -122,7 +120,7 @@ export async function cleanupUnusedImages(
  * @param articleId 文章 ID
  */
 export async function deleteAllArticleImages(articleId: number): Promise<void> {
-  const articleDir = join(UPLOAD_DIR, String(articleId));
+  const articleDir = join(getUploadDir(), String(articleId));
   
   if (!existsSync(articleDir)) {
     return;
