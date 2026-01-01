@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+// 应用模式类型
+type AppMode = "local" | "cloud" | null;
+
 // 暴露安全的 API 给渲染进程
 contextBridge.exposeInMainWorld("electronAPI", {
   // 窗口控制
@@ -15,6 +18,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
       // 返回取消监听的函数
       return () => ipcRenderer.removeListener("window:maximized-change", handler);
     },
+  },
+
+  // 应用模式相关
+  appMode: {
+    // 获取应用模式配置
+    get: () => ipcRenderer.invoke("appMode:get"),
+
+    // 设置应用模式（本地/云端）
+    set: (mode: AppMode) => ipcRenderer.invoke("appMode:set", mode),
+
+    // 检查模式是否已配置
+    isConfigured: () => ipcRenderer.invoke("appMode:isConfigured"),
+
+    // 获取本地服务器状态
+    getLocalServerStatus: () => ipcRenderer.invoke("appMode:getLocalServerStatus"),
+
+    // 手动启动本地服务器
+    startLocalServer: () => ipcRenderer.invoke("appMode:startLocalServer"),
+
+    // 手动停止本地服务器
+    stopLocalServer: () => ipcRenderer.invoke("appMode:stopLocalServer"),
+
+    // 重置模式配置
+    reset: () => ipcRenderer.invoke("appMode:reset"),
   },
 
   // 腾讯云社区认证相关
@@ -98,7 +125,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 });
 
-// TypeScript 类型定义
+// TypeScript 类型定义（AppMode 类型已在文件开头定义）
+
+interface AppModeConfig {
+  mode: AppMode;
+  isConfigured: boolean;
+}
+
+interface LocalServerStatus {
+  running: boolean;
+  url: string;
+  healthy: boolean;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -108,6 +147,15 @@ declare global {
         close: () => Promise<void>;
         isMaximized: () => Promise<boolean>;
         onMaximizedChange: (callback: (isMaximized: boolean) => void) => () => void;
+      };
+      appMode: {
+        get: () => Promise<AppModeConfig>;
+        set: (mode: AppMode) => Promise<{ success: boolean; message?: string; serverUrl?: string }>;
+        isConfigured: () => Promise<boolean>;
+        getLocalServerStatus: () => Promise<LocalServerStatus>;
+        startLocalServer: () => Promise<{ success: boolean; url?: string; error?: string }>;
+        stopLocalServer: () => Promise<{ success: boolean }>;
+        reset: () => Promise<{ success: boolean }>;
       };
       auth: {
         getStatus: () => Promise<{

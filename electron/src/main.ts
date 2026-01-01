@@ -2,8 +2,16 @@ import { app, BrowserWindow, ipcMain, session, Menu, globalShortcut, shell } fro
 import * as path from "path";
 import { TencentAuth } from "./auth/tencentAuth";
 import { JuejinAuth } from "./auth/juejinAuth";
-import { createStore } from "./store";
+import { createStore, AppMode } from "./store";
 import { initAutoUpdater } from "./autoUpdater";
+import {
+  startLocalServer,
+  stopLocalServer,
+  getLocalServerUrl,
+  getLocalServerStatus,
+  LOCAL_SERVER_PORT,
+  LOCAL_SERVER_HOST,
+} from "./localServer";
 
 // 存储实例
 const store = createStore();
@@ -216,6 +224,161 @@ function registerUtilityHandlers() {
   });
 }
 
+// 开发环境下的默认后端地址
+const DEV_SERVER_URL = "http://localhost:3000";
+
+// 注册应用模式相关 IPC 处理器
+function registerAppModeHandlers() {
+  // 获取应用模式配置
+  ipcMain.handle("appMode:get", () => {
+    const config = store.get("appMode");
+    return config || { mode: null, isConfigured: false };
+  });
+
+  // 设置应用模式
+  ipcMain.handle("appMode:set", async (_event, mode: AppMode) => {
+    try {
+      if (mode === "local") {
+        if (isDev) {
+          // 开发环境：使用开发者手动启动的后端服务（端口 3000）
+          // 不自动启动后端，开发者应运行 dev:server
+          console.log("[App] 开发环境本地模式，使用开发服务器地址:", DEV_SERVER_URL);
+          
+          // 保存模式配置
+          store.set("appMode", {
+            mode: "local",
+            isConfigured: true,
+          });
+
+          // 设置服务器配置为开发服务器地址
+          store.set("serverConfig", {
+            baseUrl: DEV_SERVER_URL,
+            isConfigured: true,
+          });
+
+          return { success: true, serverUrl: DEV_SERVER_URL };
+        } else {
+          // 生产环境：启动本地服务器
+          const result = await startLocalServer();
+          if (!result.success) {
+            return {
+              success: false,
+              message: result.error || "启动本地服务器失败",
+            };
+          }
+
+          // 保存模式配置
+          store.set("appMode", {
+            mode: "local",
+            isConfigured: true,
+          });
+
+          // 同时设置服务器配置为本地地址
+          store.set("serverConfig", {
+            baseUrl: result.url!,
+            isConfigured: true,
+          });
+
+          return { success: true, serverUrl: result.url };
+        }
+      } else if (mode === "cloud") {
+        // 云端模式：停止本地服务器（如果正在运行）
+        if (!isDev) {
+          await stopLocalServer();
+        }
+
+        // 保存模式配置
+        store.set("appMode", {
+          mode: "cloud",
+          isConfigured: true,
+        });
+
+        return { success: true };
+      } else {
+        return { success: false, message: "无效的模式" };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "设置模式失败",
+      };
+    }
+  });
+
+  // 检查模式是否已配置
+  ipcMain.handle("appMode:isConfigured", () => {
+    const config = store.get("appMode");
+    return config?.isConfigured === true;
+  });
+
+  // 获取本地服务器状态
+  ipcMain.handle("appMode:getLocalServerStatus", async () => {
+    if (isDev) {
+      // 开发环境：检查开发服务器是否运行
+      try {
+        const response = await fetch(`${DEV_SERVER_URL}/health`, {
+          method: "GET",
+          signal: AbortSignal.timeout(2000),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          return {
+            running: true,
+            url: DEV_SERVER_URL,
+            healthy: data.status === "ok",
+          };
+        }
+      } catch {
+        // 开发服务器未运行
+      }
+      return {
+        running: false,
+        url: DEV_SERVER_URL,
+        healthy: false,
+      };
+    }
+    return getLocalServerStatus();
+  });
+
+  // 手动启动本地服务器
+  ipcMain.handle("appMode:startLocalServer", async () => {
+    if (isDev) {
+      // 开发环境不自动启动，提示用户手动运行
+      return {
+        success: false,
+        error: "开发环境请手动运行 'bun run dev:server' 启动后端服务",
+      };
+    }
+    return startLocalServer();
+  });
+
+  // 手动停止本地服务器
+  ipcMain.handle("appMode:stopLocalServer", async () => {
+    if (isDev) {
+      // 开发环境不管理后端服务
+      return { success: true };
+    }
+    await stopLocalServer();
+    return { success: true };
+  });
+
+  // 重置模式配置（用于重新选择）
+  ipcMain.handle("appMode:reset", async () => {
+    if (!isDev) {
+      await stopLocalServer();
+    }
+    store.set("appMode", {
+      mode: null,
+      isConfigured: false,
+    });
+    store.set("serverConfig", {
+      baseUrl: "",
+      isConfigured: false,
+    });
+    return { success: true };
+  });
+}
+
 // 注册腾讯云社区 IPC 处理器
 function registerTencentAuthHandlers() {
   // 获取登录状态
@@ -344,15 +507,48 @@ function registerIpcHandlers() {
   registerJuejinAuthHandlers();
 }
 
+// 初始化应用模式（启动本地服务器等）
+async function initializeAppMode() {
+  // 开发环境下不自动启动本地服务器，开发者应手动运行 dev:server
+  if (isDev) {
+    console.log("[App] 开发环境，跳过自动启动本地服务器（请手动运行 dev:server）");
+    return;
+  }
+  
+  const appModeConfig = store.get("appMode");
+  
+  if (appModeConfig?.mode === "local" && appModeConfig.isConfigured) {
+    console.log("[App] 检测到本地模式，正在启动本地服务器...");
+    
+    const result = await startLocalServer();
+    if (result.success) {
+      console.log(`[App] 本地服务器已启动: ${result.url}`);
+      
+      // 更新服务器配置
+      store.set("serverConfig", {
+        baseUrl: result.url!,
+        isConfigured: true,
+      });
+    } else {
+      console.error(`[App] 本地服务器启动失败: ${result.error}`);
+    }
+  }
+}
+
 // 应用就绪
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // 隐藏默认菜单栏
   Menu.setApplicationMenu(null);
 
   registerWindowHandlers();
   registerServerConfigHandlers();
   registerUtilityHandlers();
+  registerAppModeHandlers();
   registerIpcHandlers();
+  
+  // 初始化应用模式（本地模式下启动服务器）
+  await initializeAppMode();
+  
   createMainWindow();
   setupWindowEvents();
 
@@ -369,9 +565,34 @@ app.whenReady().then(() => {
   });
 });
 
+// 标记是否正在退出
+let isQuitting = false;
+
 // 所有窗口关闭时退出
-app.on("window-all-closed", () => {
+app.on("window-all-closed", async () => {
   if (process.platform !== "darwin") {
+    // 停止本地服务器（等待清理完成）
+    await stopLocalServer();
     app.quit();
   }
+});
+
+// 应用退出前清理
+app.on("before-quit", async (event) => {
+  // 如果已经在退出过程中，不要重复处理
+  if (isQuitting) {
+    return;
+  }
+  
+  // 标记正在退出
+  isQuitting = true;
+  
+  // 阻止默认行为，等待清理完成
+  event.preventDefault();
+  
+  // 停止本地服务器
+  await stopLocalServer();
+  
+  // 清理完成后真正退出
+  app.exit(0);
 });

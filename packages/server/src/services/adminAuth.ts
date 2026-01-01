@@ -2,8 +2,9 @@ import { AppDataSource } from "../db";
 import { AdminUser, AdminRole } from "../entities/AdminUser";
 import { AdminSession } from "../entities/AdminSession";
 import { LessThan } from "typeorm";
+import bcrypt from "bcryptjs";
 
-// 使用 Bun 内置的密码哈希功能
+// 密码哈希轮数
 const SALT_ROUNDS = 10;
 
 // 初始超级管理员配置
@@ -16,10 +17,7 @@ const INITIAL_ADMIN = {
  * 密码哈希
  */
 export async function hashPassword(password: string): Promise<string> {
-  return await Bun.password.hash(password, {
-    algorithm: "bcrypt",
-    cost: SALT_ROUNDS,
-  });
+  return await bcrypt.hash(password, SALT_ROUNDS);
 }
 
 /**
@@ -29,7 +27,7 @@ export async function verifyPassword(
   password: string,
   hash: string
 ): Promise<boolean> {
-  return await Bun.password.verify(password, hash);
+  return await bcrypt.compare(password, hash);
 }
 
 /**

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/utils/trpc";
 import ArticleEditorLayout from "@/components/ArticleEditorLayout";
 import ImportWordSettings from "@/components/ImportWordSettings";
+import { convertToRelativeUrls } from "@/components/MilkdownEditor";
 
 function NewArticlePage() {
   const navigate = useNavigate();
@@ -40,9 +41,11 @@ function NewArticlePage() {
       message.error("请输入文章内容");
       return;
     }
+    // 保存前：将完整图片 URL 转换为相对路径
+    const finalContent = convertToRelativeUrls(content);
     createMutation.mutate({
       title,
-      content,
+      content: finalContent,
     });
   };
 

@@ -68,8 +68,14 @@ export interface SyncStatusResult {
  * 文章同步服务类
  */
 export class ArticleSyncService {
-  private articleRepo = AppDataSource.getRepository(Article);
-  private userRepo = AppDataSource.getRepository(User);
+  // 使用 getter 懒加载，避免模块加载时数据库未初始化的问题
+  private get articleRepo() {
+    return AppDataSource.getRepository(Article);
+  }
+  
+  private get userRepo() {
+    return AppDataSource.getRepository(User);
+  }
 
   /**
    * 获取用户的 API 客户端

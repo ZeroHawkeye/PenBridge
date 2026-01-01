@@ -8,7 +8,7 @@ import { trpc } from "@/utils/trpc";
 import PublishMenu from "@/components/PublishMenu";
 import ArticleEditorLayout from "@/components/ArticleEditorLayout";
 import ImportWordSettings from "@/components/ImportWordSettings";
-import { replaceBase64ImagesInMarkdown } from "@/components/MilkdownEditor";
+import { replaceBase64ImagesInMarkdown, convertToAbsoluteUrls, convertToRelativeUrls } from "@/components/MilkdownEditor";
 
 // 保存状态类型
 type SaveStatus = "idle" | "saving" | "saved";
@@ -114,6 +114,9 @@ function EditArticlePage() {
           console.error("替换 base64 图片失败:", error);
         }
       }
+      
+      // 保存前：将完整图片 URL 转换为相对路径（避免服务器地址变化导致图片失效）
+      finalContent = convertToRelativeUrls(finalContent);
 
       setSaveStatus("saving");
       try {
@@ -225,7 +228,9 @@ function EditArticlePage() {
   // 内容加载完成后更新编辑器
   useEffect(() => {
     if (articleContent && articleMeta && !contentLoadedRef.current) {
-      setContent(articleContent.content || "");
+      // 将相对路径转换为完整 URL，以便编辑器正确显示图片
+      const contentWithAbsoluteUrls = convertToAbsoluteUrls(articleContent.content || "");
+      setContent(contentWithAbsoluteUrls);
       setEditorKey((prev) => prev + 1);
       contentLoadedRef.current = true;
 

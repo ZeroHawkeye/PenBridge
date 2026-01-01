@@ -1,13 +1,107 @@
 // 服务器配置工具函数
 
+import type { AppMode, AppModeConfig, LocalServerStatus } from "@/types/electron.d";
+
 const SERVER_BASE_URL_KEY = "server_base_url";
 const SERVER_CONFIGURED_KEY = "server_configured";
+const APP_MODE_KEY = "app_mode"; // local | cloud
+
+// 本地服务器端口（与 electron/src/localServer.ts 保持一致）
+const LOCAL_SERVER_PORT = 36925;
+const LOCAL_SERVER_URL = `http://127.0.0.1:${LOCAL_SERVER_PORT}`;
 
 /**
  * 检测是否在 Electron 环境中
  */
 export function isElectron(): boolean {
   return typeof window !== "undefined" && window.electronAPI !== undefined;
+}
+
+/**
+ * 获取当前应用模式
+ */
+export async function getAppMode(): Promise<AppModeConfig> {
+  if (isElectron()) {
+    return window.electronAPI!.appMode.get();
+  }
+  // 浏览器环境始终为云端模式（或未配置）
+  const mode = localStorage.getItem(APP_MODE_KEY) as AppMode;
+  const isConfigured = localStorage.getItem(SERVER_CONFIGURED_KEY) === "true";
+  return {
+    mode: mode || null,
+    isConfigured,
+  };
+}
+
+/**
+ * 同步获取应用模式（用于初始化）
+ */
+export function getAppModeSync(): AppMode {
+  return (localStorage.getItem(APP_MODE_KEY) as AppMode) || null;
+}
+
+/**
+ * 设置应用模式
+ */
+export async function setAppMode(mode: AppMode): Promise<{ success: boolean; message?: string; serverUrl?: string }> {
+  if (isElectron()) {
+    const result = await window.electronAPI!.appMode.set(mode);
+    if (result.success && result.serverUrl) {
+      // 同步到 localStorage
+      localStorage.setItem(SERVER_BASE_URL_KEY, result.serverUrl);
+      localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+      localStorage.setItem(APP_MODE_KEY, mode || "");
+    }
+    return result;
+  }
+  
+  // 浏览器环境只支持云端模式
+  if (mode === "local") {
+    return { success: false, message: "浏览器环境不支持本地模式" };
+  }
+  
+  localStorage.setItem(APP_MODE_KEY, mode || "");
+  return { success: true };
+}
+
+/**
+ * 检查应用模式是否已配置
+ */
+export async function isAppModeConfigured(): Promise<boolean> {
+  if (isElectron()) {
+    return window.electronAPI!.appMode.isConfigured();
+  }
+  return localStorage.getItem(SERVER_CONFIGURED_KEY) === "true";
+}
+
+/**
+ * 获取本地服务器状态（仅 Electron 环境）
+ */
+export async function getLocalServerStatus(): Promise<LocalServerStatus | null> {
+  if (!isElectron()) {
+    return null;
+  }
+  return window.electronAPI!.appMode.getLocalServerStatus();
+}
+
+/**
+ * 重置应用模式配置
+ */
+export async function resetAppMode(): Promise<{ success: boolean }> {
+  if (isElectron()) {
+    const result = await window.electronAPI!.appMode.reset();
+    if (result.success) {
+      localStorage.removeItem(SERVER_BASE_URL_KEY);
+      localStorage.removeItem(SERVER_CONFIGURED_KEY);
+      localStorage.removeItem(APP_MODE_KEY);
+    }
+    return result;
+  }
+  
+  localStorage.removeItem(SERVER_BASE_URL_KEY);
+  localStorage.removeItem(SERVER_CONFIGURED_KEY);
+  localStorage.removeItem(APP_MODE_KEY);
+  return { success: true };
 }
 
 /**
@@ -44,6 +138,12 @@ async function detectDockerDeployment(): Promise<boolean> {
  */
 export async function getServerBaseUrl(): Promise<string> {
   if (isElectron()) {
+    // 先检查应用模式
+    const modeConfig = await window.electronAPI!.appMode.get();
+    if (modeConfig.isConfigured && modeConfig.mode === "local") {
+      return LOCAL_SERVER_URL;
+    }
+    
     const config = await window.electronAPI!.serverConfig.get();
     return config.baseUrl || "";
   }
@@ -77,6 +177,7 @@ export async function setServerBaseUrl(url: string): Promise<{ success: boolean;
       // 同时保存到 localStorage，供 tRPC 同步使用
       localStorage.setItem(SERVER_BASE_URL_KEY, baseUrl);
       localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+      localStorage.setItem(APP_MODE_KEY, "cloud");
     }
     return result;
   }
@@ -84,6 +185,7 @@ export async function setServerBaseUrl(url: string): Promise<{ success: boolean;
   // 浏览器环境
   localStorage.setItem(SERVER_BASE_URL_KEY, baseUrl);
   localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+  localStorage.setItem(APP_MODE_KEY, "cloud");
   return { success: true };
 }
 
@@ -92,6 +194,11 @@ export async function setServerBaseUrl(url: string): Promise<{ success: boolean;
  */
 export async function isServerConfigured(): Promise<boolean> {
   if (isElectron()) {
+    // 先检查应用模式
+    const modeConfigured = await window.electronAPI!.appMode.isConfigured();
+    if (modeConfigured) {
+      return true;
+    }
     return window.electronAPI!.serverConfig.isConfigured();
   }
   // 浏览器环境
@@ -153,10 +260,33 @@ export async function testServerConnection(baseUrl: string): Promise<{ success: 
  */
 export async function initServerConfig(): Promise<void> {
   if (isElectron()) {
+    // 首先检查应用模式
+    const modeConfig = await window.electronAPI!.appMode.get();
+    
+    if (modeConfig.isConfigured) {
+      if (modeConfig.mode === "local") {
+        // 本地模式，使用本地服务器地址
+        localStorage.setItem(SERVER_BASE_URL_KEY, LOCAL_SERVER_URL);
+        localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+        localStorage.setItem(APP_MODE_KEY, "local");
+      } else if (modeConfig.mode === "cloud") {
+        // 云端模式，从 serverConfig 获取
+        const config = await window.electronAPI!.serverConfig.get();
+        if (config.isConfigured && config.baseUrl) {
+          localStorage.setItem(SERVER_BASE_URL_KEY, config.baseUrl);
+          localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+          localStorage.setItem(APP_MODE_KEY, "cloud");
+        }
+      }
+      return;
+    }
+    
+    // 兼容旧版本：如果没有 appMode 配置但有 serverConfig，视为云端模式
     const config = await window.electronAPI!.serverConfig.get();
     if (config.isConfigured && config.baseUrl) {
       localStorage.setItem(SERVER_BASE_URL_KEY, config.baseUrl);
       localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+      localStorage.setItem(APP_MODE_KEY, "cloud");
     }
     return;
   }
@@ -170,6 +300,7 @@ export async function initServerConfig(): Promise<void> {
       const currentOrigin = window.location.origin;
       localStorage.setItem(SERVER_BASE_URL_KEY, currentOrigin);
       localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+      localStorage.setItem(APP_MODE_KEY, "cloud");
       console.log("检测到 Docker 部署模式，自动配置服务器地址:", currentOrigin);
     }
   }
@@ -188,4 +319,11 @@ export function getTrpcUrl(): string {
  */
 export function getApiBaseUrl(): string {
   return getServerBaseUrlSync();
+}
+
+/**
+ * 获取本地服务器 URL
+ */
+export function getLocalServerUrl(): string {
+  return LOCAL_SERVER_URL;
 }

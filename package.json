@@ -12,11 +12,16 @@
     "dev:electron": "concurrently \"bun run dev:web\" \"bun run --cwd electron dev\"",
     "build:web": "bun run --cwd packages/web build",
     "build:server": "bun run --cwd packages/server build",
+    "build:server:electron": "bun run --cwd packages/server build:electron",
+    "build:server:electron:win": "bun run --cwd packages/server build:electron:win",
+    "build:server:electron:mac": "bun run --cwd packages/server build:electron:mac",
+    "build:server:electron:mac-arm": "bun run --cwd packages/server build:electron:mac-arm",
+    "build:server:electron:linux": "bun run --cwd packages/server build:electron:linux",
     "build:website": "bun run --cwd packages/website build",
     "build:electron": "cd electron && npm run build",
     "build": "bun run build:server && bun run build:web && bun run build:electron",
-    "dist:electron": "bun run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && cd electron && npm install && npm run build && npm run dist",
-    "dist:electron:win": "bun run build:web && shx rm -rf electron/web && shx cp -r packages/web/dist electron/web && cd electron && npm install && npm run build && npm run dist:win"
+    "dist:electron": "bun run build:web && bun run build:server:electron:mac && shx rm -rf electron/web electron/server && shx cp -r packages/web/dist electron/web && shx mkdir -p electron/server && shx cp packages/server/dist-electron/pen-bridge-server electron/server/ && cd electron && npm install && npm run build && npm run dist",
+    "dist:electron:win": "bun run build:web && bun run build:server:electron:win && shx rm -rf electron/web electron/server && shx cp -r packages/web/dist electron/web && shx mkdir -p electron/server && shx cp packages/server/dist-electron/pen-bridge-server.exe electron/server/ && cd electron && npm install && npm run build && npm run dist:win"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

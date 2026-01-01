@@ -35,7 +35,10 @@ export interface EmailTemplateParams {
  * 邮件服务类
  */
 export class EmailService {
-  private emailConfigRepo = AppDataSource.getRepository(EmailConfig);
+  // 使用 getter 懒加载，避免模块加载时数据库未初始化的问题
+  private get emailConfigRepo() {
+    return AppDataSource.getRepository(EmailConfig);
+  }
 
   /**
    * 创建邮件传输器

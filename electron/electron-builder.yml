@@ -14,13 +14,16 @@ directories:
 files:
   - dist/**/*
   - web/**/*
+  - server/**/*
   - "!**/*.ts"
   - "!**/tsconfig.json"
   - "!**/forge.config*.ts"
   - "!**/electron-builder.yml"
 
-# 使用 asar 打包
+# 使用 asar 打包，但解包 server 目录
 asar: true
+asarUnpack:
+  - server/**/*
 
 # Windows 配置
 win:

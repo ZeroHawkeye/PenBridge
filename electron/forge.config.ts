@@ -5,7 +5,10 @@ import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-nati
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      // 将 server 目录解包，因为后端需要作为独立进程运行
+      unpack: "**/server/**",
+    },
     name: "PenBridge",
     executableName: "penbridge",
     appCopyright: "Copyright © 2026",

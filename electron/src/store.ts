@@ -15,6 +15,15 @@ interface JuejinUserInfo {
   isLoggedIn: boolean;
 }
 
+// 应用运行模式
+export type AppMode = "local" | "cloud" | null;
+
+// 应用模式配置
+interface AppModeConfig {
+  mode: AppMode;           // 当前运行模式
+  isConfigured: boolean;   // 是否已完成首次模式选择
+}
+
 // 存储 schema
 interface StoreSchema {
   // 腾讯云社区
@@ -23,7 +32,9 @@ interface StoreSchema {
   // 掘金
   juejinCookies: any[];
   juejinUserInfo: JuejinUserInfo;
-  // 服务器配置
+  // 应用模式配置
+  appMode: AppModeConfig;
+  // 服务器配置（云端模式使用）
   serverConfig: {
     baseUrl: string; // 云端服务器地址，如 http://localhost:3000 或 https://api.example.com
     isConfigured: boolean; // 是否已完成首次配置
@@ -44,7 +55,12 @@ export function createStore() {
       juejinUserInfo: {
         isLoggedIn: false,
       },
-      // 服务器配置
+      // 应用模式配置
+      appMode: {
+        mode: null,
+        isConfigured: false,
+      },
+      // 服务器配置（云端模式）
       serverConfig: {
         baseUrl: "",
         isConfigured: false,
@@ -55,4 +71,4 @@ export function createStore() {
   return store;
 }
 
-export type { StoreSchema, UserInfo, JuejinUserInfo };
+export type { StoreSchema, UserInfo, JuejinUserInfo, AppModeConfig };

@@ -75,6 +75,33 @@ export interface ElectronUpdaterAPI {
   onStatusChange: (callback: (status: UpdateStatus) => void) => () => void;
 }
 
+// 应用模式类型
+export type AppMode = "local" | "cloud" | null;
+
+// 应用模式配置
+export interface AppModeConfig {
+  mode: AppMode;
+  isConfigured: boolean;
+}
+
+// 本地服务器状态
+export interface LocalServerStatus {
+  running: boolean;
+  url: string;
+  healthy: boolean;
+}
+
+// 应用模式 API
+export interface ElectronAppModeAPI {
+  get: () => Promise<AppModeConfig>;
+  set: (mode: AppMode) => Promise<{ success: boolean; message?: string; serverUrl?: string }>;
+  isConfigured: () => Promise<boolean>;
+  getLocalServerStatus: () => Promise<LocalServerStatus>;
+  startLocalServer: () => Promise<{ success: boolean; url?: string; error?: string }>;
+  stopLocalServer: () => Promise<{ success: boolean }>;
+  reset: () => Promise<{ success: boolean }>;
+}
+
 export interface ElectronAPI {
   window: ElectronWindowAPI;
   auth: ElectronAuthAPI;
@@ -82,6 +109,7 @@ export interface ElectronAPI {
   serverConfig: ElectronServerConfigAPI;
   shell: ElectronShellAPI;
   updater: ElectronUpdaterAPI;
+  appMode: ElectronAppModeAPI;
   platform: string;
 }
 

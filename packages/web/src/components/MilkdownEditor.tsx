@@ -11,7 +11,7 @@ import "@milkdown/crepe/theme/common/style.css";
 // 主题样式
 import "@milkdown/crepe/theme/frame.css";
 
-// 上传图片到服务器
+// 上传图片到服务器，返回相对路径（不包含服务器地址）
 async function uploadImageToServer(file: File, articleId: number): Promise<string> {
   const apiBaseUrl = getServerBaseUrlSync();
   if (!apiBaseUrl) {
@@ -32,8 +32,60 @@ async function uploadImageToServer(file: File, articleId: number): Promise<strin
   }
 
   const data = await response.json();
-  // 返回完整的图片 URL
-  return `${apiBaseUrl}${data.url}`;
+  // 返回相对路径（如 /uploads/27/xxx.png），不包含服务器地址
+  // 这样即使服务器地址变化，图片链接仍然有效
+  return data.url;
+}
+
+// 将相对路径转换为完整 URL（用于编辑器显示）
+function toAbsoluteImageUrl(relativeUrl: string): string {
+  // 如果已经是完整 URL 或 base64，直接返回
+  if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://") || relativeUrl.startsWith("data:")) {
+    return relativeUrl;
+  }
+  // 如果是相对路径，拼接服务器地址
+  const apiBaseUrl = getServerBaseUrlSync();
+  if (!apiBaseUrl) {
+    return relativeUrl;
+  }
+  return `${apiBaseUrl}${relativeUrl}`;
+}
+
+// 将完整 URL 转换为相对路径（用于保存）
+function toRelativeImageUrl(absoluteUrl: string): string {
+  // 如果是 base64，直接返回
+  if (absoluteUrl.startsWith("data:")) {
+    return absoluteUrl;
+  }
+  // 如果已经是相对路径，直接返回
+  if (absoluteUrl.startsWith("/uploads/")) {
+    return absoluteUrl;
+  }
+  // 提取相对路径部分
+  const uploadsIndex = absoluteUrl.indexOf("/uploads/");
+  if (uploadsIndex !== -1) {
+    return absoluteUrl.slice(uploadsIndex);
+  }
+  // 其他情况直接返回
+  return absoluteUrl;
+}
+
+// 将 markdown 内容中的相对图片路径转换为完整 URL（用于编辑器显示）
+export function convertToAbsoluteUrls(markdown: string): string {
+  // 匹配 markdown 图片: ![alt](/uploads/...)
+  return markdown.replace(
+    /!\[([^\]]*)\]\((\/uploads\/[^)]+)\)/g,
+    (_match, alt, url) => `![${alt}](${toAbsoluteImageUrl(url)})`
+  );
+}
+
+// 将 markdown 内容中的完整图片 URL 转换为相对路径（用于保存）
+export function convertToRelativeUrls(markdown: string): string {
+  // 匹配 markdown 图片中包含 /uploads/ 的完整 URL
+  return markdown.replace(
+    /!\[([^\]]*)\]\(([^)]*\/uploads\/[^)]+)\)/g,
+    (_match, alt, url) => `![${alt}](${toRelativeImageUrl(url)})`
+  );
 }
 
 // 将 base64 转换为 File 对象

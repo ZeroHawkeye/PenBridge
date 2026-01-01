@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { trpcServer } from "@hono/trpc-server";
-import { serveStatic } from "hono/bun";
+import { serveStatic } from "./services/staticServe";
 import { appRouter } from "./trpc/router";
 import { initDatabase, AppDataSource } from "./db";
 import { schedulerService } from "./services/scheduler";
@@ -1318,13 +1318,52 @@ async function main() {
   // 启动定时任务调度器
   schedulerService.start();
 
-  console.log("Server running at http://localhost:3000");
+  // 从环境变量读取端口配置
+  const port = process.env.PEN_BRIDGE_PORT || 3000;
+  const host = process.env.PEN_BRIDGE_HOST || "localhost";
+  console.log(`Server running at http://${host}:${port}`);
 }
 
 main();
 
+// 优雅关闭处理：接收到终止信号时清理资源
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n[Server] 收到 ${signal} 信号，正在优雅关闭...`);
+  
+  try {
+    // 1. 停止定时任务调度器
+    console.log("[Server] 停止定时任务调度器...");
+    schedulerService.stop();
+    
+    // 2. 关闭数据库连接
+    console.log("[Server] 关闭数据库连接...");
+    const { closeDatabase } = await import("./db");
+    await closeDatabase();
+    
+    console.log("[Server] 清理完成，退出进程");
+    process.exit(0);
+  } catch (error) {
+    console.error("[Server] 清理过程中出错:", error);
+    process.exit(1);
+  }
+};
+
+// 监听终止信号
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Windows 下的 SIGHUP 信号（Electron 关闭时可能发送）
+if (process.platform !== "win32") {
+  process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
+}
+
+// 从环境变量读取端口和主机配置（Electron 本地模式使用）
+const serverPort = process.env.PEN_BRIDGE_PORT ? parseInt(process.env.PEN_BRIDGE_PORT, 10) : 3000;
+const serverHost = process.env.PEN_BRIDGE_HOST || "localhost";
+
 export default {
-  port: 3000,
+  port: serverPort,
+  hostname: serverHost,
   fetch: app.fetch,
   // 增加空闲超时时间，支持长时间的 AI 对话请求（默认 10s -> 120s）
   idleTimeout: 120,
