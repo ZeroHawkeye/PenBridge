@@ -74,6 +74,8 @@ EXPOSE 3000
 # 设置环境变量
 ENV NODE_ENV=production
 ENV PORT=3000
+# Docker 容器需要监听 0.0.0.0 才能从外部访问
+ENV PEN_BRIDGE_HOST=0.0.0.0
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

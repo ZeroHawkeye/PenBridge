@@ -5,6 +5,11 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 
+// 根据构建目标设置 base 路径
+// - Electron 打包：使用相对路径 "./"（file:// 协议）
+// - Docker/Web 部署：使用绝对路径 "/"（HTTP 协议）
+const isElectron = process.env.BUILD_TARGET === "electron";
+
 export default defineConfig({
   plugins: [
     // TanStack Router 插件需要在 React 插件之前
@@ -28,8 +33,8 @@ export default defineConfig({
       ],
     }),
   ],
-  // Electron 打包后使用 file:// 协议，需要相对路径
-  base: "./",
+  // Electron 打包使用相对路径，Docker/Web 部署使用绝对路径
+  base: isElectron ? "./" : "/",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
