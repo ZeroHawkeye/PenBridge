@@ -114,7 +114,10 @@ function base64ToFile(base64: string, filename: string): File {
 // 创建图片上传函数（用于 ImageBlock 配置）
 function createUploadHandler(articleId: number) {
   return async function uploadImage(file: File): Promise<string> {
-    return uploadImageToServer(file, articleId);
+    // 上传后获取相对路径
+    const relativeUrl = await uploadImageToServer(file, articleId);
+    // 返回完整 URL 用于编辑器立即显示
+    return toAbsoluteImageUrl(relativeUrl);
   };
 }
 
@@ -145,11 +148,13 @@ function createProxyDomURL(articleId: number) {
       try {
         console.log("[MilkdownEditor] 上传 base64 图片...");
         const file = base64ToFile(url, `paste-${Date.now()}`);
-        const uploadedUrl = await uploadImageToServer(file, articleId);
-        // 缓存上传结果
-        uploadedBase64Cache.set(cacheKey, uploadedUrl);
-        console.log("[MilkdownEditor] 图片上传成功:", uploadedUrl);
-        return uploadedUrl;
+        const relativeUrl = await uploadImageToServer(file, articleId);
+        // 转换为完整 URL 用于编辑器显示
+        const absoluteUrl = toAbsoluteImageUrl(relativeUrl);
+        // 缓存上传结果（使用完整 URL）
+        uploadedBase64Cache.set(cacheKey, absoluteUrl);
+        console.log("[MilkdownEditor] 图片上传成功:", absoluteUrl);
+        return absoluteUrl;
       } catch (error) {
         console.error("上传粘贴的图片失败:", error);
         // 上传失败时返回原始 URL

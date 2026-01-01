@@ -34,3 +34,5 @@ Thumbs.db
 # Bun
 bun.lock
 *.tar
+electron/server
+packages/server/dist-electron

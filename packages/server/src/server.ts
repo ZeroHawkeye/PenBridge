@@ -12,11 +12,11 @@ import { initDatabase, AppDataSource, setDatabasePath } from "./db";
 import { schedulerService } from "./services/scheduler";
 import { initializeSuperAdmin, cleanupExpiredSessions, validateSession } from "./services/adminAuth";
 import { AIProvider, AIModel } from "./entities/AIProvider";
-import { 
-  getAllToolDefinitions, 
-  getToolExecutionLocation, 
+import {
+  getAllToolDefinitions,
+  getToolExecutionLocation,
   executeBackendTool,
-  formatToolsForAPI 
+  formatToolsForAPI
 } from "./services/aiTools";
 import { mkdirSync, existsSync, writeFileSync, readFileSync } from "fs";
 import { join, dirname } from "path";
@@ -44,12 +44,12 @@ const DEFAULT_CONFIG: Required<ServerConfig> = {
 export function createApp(config: ServerConfig = {}) {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
   const { dataDir, enableStaticServe } = finalConfig;
-  
+
   const app = new Hono();
-  
+
   // 上传目录路径
   const UPLOAD_DIR = join(dataDir, "uploads");
-  
+
   // 前端静态文件目录（Docker 部署时使用）
   const PUBLIC_DIR = "public";
 
@@ -64,17 +64,17 @@ export function createApp(config: ServerConfig = {}) {
           "http://localhost:3000",
           "http://127.0.0.1:36925",  // 本地模式端口
         ];
-        
+
         // file:// 协议的 origin 为 null，Electron 打包后需要允许
         if (!origin || origin === "null") {
           return origin || "*";
         }
-        
+
         // 允许配置的来源
         if (allowedOrigins.includes(origin)) {
           return origin;
         }
-        
+
         // 允许同一 IP 的不同端口访问（生产环境部署）
         try {
           const url = new URL(origin);
@@ -85,7 +85,7 @@ export function createApp(config: ServerConfig = {}) {
         } catch {
           // URL 解析失败，拒绝
         }
-        
+
         return null;
       },
       credentials: true,
@@ -161,29 +161,29 @@ export function createApp(config: ServerConfig = {}) {
     const logPrefix = `[AI Chat ${requestId}]`;
     const timings: { step: string; elapsed: number }[] = [];
     const startTime = Date.now();
-    
+
     const logStep = (step: string) => {
       const elapsed = Date.now() - startTime;
       timings.push({ step, elapsed });
       console.log(`${logPrefix} ${step} (+${elapsed}ms)`);
     };
-    
+
     logStep("请求开始");
-    
+
     try {
       // 验证登录状态
       const authHeader = c.req.header("authorization");
       const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
-      
+
       if (!token) {
         logStep("错误: 未提供 token");
         return c.json({ error: "未登录" }, 401);
       }
-      
+
       logStep("开始验证 session");
       const session = await validateSession(token);
       logStep("session 验证完成");
-      
+
       if (!session) {
         logStep("错误: session 无效");
         return c.json({ error: "登录已过期" }, 401);
@@ -212,7 +212,7 @@ export function createApp(config: ServerConfig = {}) {
         logStep("错误: 供应商不存在");
         return c.json({ error: "供应商不存在" }, 404);
       }
-      
+
       // 查询模型配置（获取能力设置）
       logStep("开始查询模型配置");
       const modelRepo = AppDataSource.getRepository(AIModel);
@@ -220,17 +220,17 @@ export function createApp(config: ServerConfig = {}) {
         where: { providerId, modelId, userId: 1 },
       });
       logStep("模型配置查询完成");
-      
+
       console.log(`${logPrefix} 供应商: ${provider.name}, API地址: ${provider.baseUrl}`);
       console.log(`${logPrefix} 模型能力配置: ${modelConfig?.capabilities ? JSON.stringify(modelConfig.capabilities) : "无"}`);
 
       const apiUrl = `${provider.baseUrl}/chat/completions`;
-      
+
       // 获取模型能力配置
       const capabilities = modelConfig?.capabilities;
       const thinkingConfig = capabilities?.thinking;
       const streamingConfig = capabilities?.streaming;
-      
+
       // 构建基础请求体
       const requestBody: Record<string, any> = {
         model: modelId,
@@ -240,26 +240,26 @@ export function createApp(config: ServerConfig = {}) {
         // 根据流式输出配置决定是否启用
         stream: streamingConfig?.supported !== false && streamingConfig?.enabled !== false,
       };
-      
+
       // 根据模型的深度思考配置添加相应参数
       // 测试对话中，如果模型支持深度思考，总是启用以便测试
       if (thinkingConfig?.supported) {
         const apiFormat = thinkingConfig.apiFormat || "standard";
-        
+
         console.log(`${logPrefix} 深度思考配置: apiFormat=${apiFormat}, supported=${thinkingConfig.supported}`);
-        
+
         if (apiFormat === "openai") {
           // OpenAI 专用格式: 使用 reasoning.effort 参数
           const reasoningParams: Record<string, any> = {
             effort: "medium",
           };
-          
+
           // 添加 summary 参数（如果配置了且不是 disabled）
           const summaryType = thinkingConfig.reasoningSummary;
           if (summaryType && summaryType !== "disabled") {
             reasoningParams.summary = summaryType;
           }
-          
+
           requestBody.reasoning = reasoningParams;
           console.log(`${logPrefix} OpenAI 推理模式: effort=${reasoningParams.effort}, summary=${summaryType || "未设置"}`);
         } else {
@@ -283,10 +283,10 @@ export function createApp(config: ServerConfig = {}) {
         console.log(`${logPrefix} 请求URL: ${apiUrl}`);
         console.log(`${logPrefix} 请求模型: ${modelId}`);
         console.log(`${logPrefix} 目标主机: ${hostname}`);
-        
+
         // 记录 fetch 开始时间
         const fetchStartTime = Date.now();
-        
+
         const streamResponse = await fetch(apiUrl, {
           method: "POST",
           headers: {
@@ -295,15 +295,15 @@ export function createApp(config: ServerConfig = {}) {
           },
           body: JSON.stringify(requestBody),
         });
-        
+
         const fetchDuration = Date.now() - fetchStartTime;
         logStep(`流式 API 响应返回: status=${streamResponse.status}, fetch耗时=${fetchDuration}ms`);
 
         // 检查响应是否为 SSE 流
         const contentType = streamResponse.headers.get("content-type") || "";
         console.log(`${logPrefix} 响应 Content-Type: ${contentType}`);
-        
-        const isStream = contentType.includes("text/event-stream") || 
+
+        const isStream = contentType.includes("text/event-stream") ||
                          contentType.includes("application/octet-stream") ||
                          (streamResponse.ok && streamResponse.body);
         console.log(`${logPrefix} 是否为流式响应: ${isStream}`);
@@ -311,7 +311,7 @@ export function createApp(config: ServerConfig = {}) {
         if (!streamResponse.ok) {
           logStep("流式请求失败，解析错误信息");
           const errorData = await streamResponse.json().catch(() => ({}));
-          const errorMessage = (errorData as any).error?.message || 
+          const errorMessage = (errorData as any).error?.message ||
                               `HTTP ${streamResponse.status}: ${streamResponse.statusText}`;
           logStep(`错误信息: ${errorMessage}`);
           return c.json({ error: errorMessage }, 400);
@@ -319,7 +319,7 @@ export function createApp(config: ServerConfig = {}) {
 
         if (isStream && streamResponse.body) {
           logStep("开始处理 SSE 流式响应");
-          
+
           // SSE 流式响应
           return streamSSE(c, async (stream) => {
             const reader = streamResponse.body!.getReader();
@@ -340,7 +340,7 @@ export function createApp(config: ServerConfig = {}) {
                   logStep(`流式读取完成: 共 ${chunkCount} 个数据块, 内容长度=${fullContent.length}, 思维链长度=${fullReasoning.length}`);
                   break;
                 }
-                
+
                 chunkCount++;
                 if (chunkCount === 1) {
                   firstChunkTime = Date.now() - startTime;
@@ -362,7 +362,7 @@ export function createApp(config: ServerConfig = {}) {
                     const delta = data.choices?.[0]?.delta || {};
                     const content = delta.content || "";
                     const reasoningContent = delta.reasoning_content || "";
-                    
+
                     // 处理 OpenAI Responses API 格式（output 数组）
                     if (data.output && Array.isArray(data.output)) {
                       for (const outputItem of data.output) {
@@ -375,7 +375,7 @@ export function createApp(config: ServerConfig = {}) {
                               data: JSON.stringify({ message: "AI 推理摘要..." }),
                             });
                           }
-                          
+
                           for (const summaryItem of outputItem.summary) {
                             if (summaryItem.type === "summary_text" && summaryItem.text) {
                               fullReasoning += summaryItem.text;
@@ -386,7 +386,7 @@ export function createApp(config: ServerConfig = {}) {
                             }
                           }
                         }
-                        
+
                         // 处理消息内容
                         if (outputItem.type === "message" && outputItem.content) {
                           if (isReasoning) {
@@ -396,7 +396,7 @@ export function createApp(config: ServerConfig = {}) {
                               data: JSON.stringify({ message: "推理完成，以下是回答..." }),
                             });
                           }
-                          
+
                           for (const contentItem of outputItem.content) {
                             if (contentItem.type === "output_text" && contentItem.text) {
                               fullContent += contentItem.text;
@@ -409,7 +409,7 @@ export function createApp(config: ServerConfig = {}) {
                         }
                       }
                     }
-                    
+
                     // 处理思维链内容（深度思考模式 - 智谱/DeepSeek 格式）
                     if (reasoningContent) {
                       if (!isReasoning) {
@@ -419,14 +419,14 @@ export function createApp(config: ServerConfig = {}) {
                           data: JSON.stringify({ message: "开始深度思考..." }),
                         });
                       }
-                      
+
                       fullReasoning += reasoningContent;
                       await stream.writeSSE({
                         event: "reasoning",
                         data: JSON.stringify({ content: reasoningContent }),
                       });
                     }
-                    
+
                     // 处理正常内容（标准 OpenAI 兼容格式）
                     if (content) {
                       if (isReasoning) {
@@ -436,7 +436,7 @@ export function createApp(config: ServerConfig = {}) {
                           data: JSON.stringify({ message: "思考完成，开始回答..." }),
                         });
                       }
-                      
+
                       fullContent += content;
                       await stream.writeSSE({
                         event: "content",
@@ -458,7 +458,7 @@ export function createApp(config: ServerConfig = {}) {
               // 发送完成事件
               const duration = Date.now() - startTime;
               logStep(`发送完成事件: 总耗时=${duration}ms, 首字节=${firstChunkTime}ms`);
-              
+
               await stream.writeSSE({
                 event: "done",
                 data: JSON.stringify({
@@ -474,13 +474,13 @@ export function createApp(config: ServerConfig = {}) {
                   },
                 }),
               });
-              
+
               console.log(`${logPrefix} 请求完成 - 总耗时: ${duration}ms, 首字节: ${firstChunkTime}ms, tokens: ${promptTokens}+${completionTokens}, 思维链: ${fullReasoning.length > 0 ? '有' : '无'}`);
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : "流处理错误";
               logStep(`流处理错误: ${errorMsg}`);
               console.error(`${logPrefix} 流处理异常:`, error);
-              
+
               await stream.writeSSE({
                 event: "error",
                 data: JSON.stringify({ error: errorMsg }),
@@ -497,7 +497,7 @@ export function createApp(config: ServerConfig = {}) {
 
       // 回退到普通请求（非流式）
       logStep("开始发起普通（非流式）API 请求");
-      
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -509,7 +509,7 @@ export function createApp(config: ServerConfig = {}) {
           stream: false,
         }),
       });
-      
+
       logStep(`普通 API 响应返回: status=${response.status}`);
 
       const duration = Date.now() - startTime;
@@ -517,7 +517,7 @@ export function createApp(config: ServerConfig = {}) {
       if (!response.ok) {
         logStep("普通请求失败，解析错误信息");
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = (errorData as any).error?.message || 
+        const errorMessage = (errorData as any).error?.message ||
                             `HTTP ${response.status}: ${response.statusText}`;
         logStep(`错误信息: ${errorMessage}`);
         return c.json({ error: errorMessage }, 400);
@@ -526,10 +526,10 @@ export function createApp(config: ServerConfig = {}) {
       logStep("开始解析响应 JSON");
       const data = await response.json();
       logStep("响应 JSON 解析完成");
-      
+
       const content = data.choices?.[0]?.message?.content || "无响应内容";
       const usage = data.usage || {};
-      
+
       console.log(`${logPrefix} 普通请求完成 - 总耗时: ${duration}ms, tokens: ${usage.prompt_tokens || 0}+${usage.completion_tokens || 0}`);
 
       return c.json({
@@ -549,7 +549,7 @@ export function createApp(config: ServerConfig = {}) {
       logStep(`请求异常: ${errorMsg}`);
       console.error(`${logPrefix} 请求异常:`, error);
       console.log(`${logPrefix} 耗时统计:`, timings);
-      
+
       return c.json({ error: errorMsg }, 500);
     }
   });
@@ -559,24 +559,24 @@ export function createApp(config: ServerConfig = {}) {
     const requestId = Math.random().toString(36).substring(7);
     const logPrefix = `[AI Chat Stream ${requestId}]`;
     const startTime = Date.now();
-    
+
     const logStep = (step: string) => {
       const elapsed = Date.now() - startTime;
       console.log(`${logPrefix} ${step} (+${elapsed}ms)`);
     };
-    
+
     logStep("请求开始");
-    
+
     try {
       // 验证登录状态
       const authHeader = c.req.header("authorization");
       const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
-      
+
       if (!token) {
         logStep("错误: 未提供 token");
         return c.json({ error: "未登录" }, 401);
       }
-      
+
       const session = await validateSession(token);
       if (!session) {
         logStep("错误: session 无效");
@@ -585,16 +585,16 @@ export function createApp(config: ServerConfig = {}) {
 
       // 解析请求体
       const body = await c.req.json();
-      const { 
-        providerId, 
-        modelId, 
+      const {
+        providerId,
+        modelId,
         messages,
         enableTools = true,
         articleContext,
         thinkingEnabled,
         reasoningEffort,
       } = body;
-      
+
       logStep(`请求体解析完成: providerId=${providerId}, modelId=${modelId}, messagesCount=${messages?.length || 0}`);
 
       if (!providerId || !modelId || !messages) {
@@ -612,20 +612,20 @@ export function createApp(config: ServerConfig = {}) {
         logStep("错误: 供应商不存在");
         return c.json({ error: "供应商不存在" }, 404);
       }
-      
+
       // 获取模型配置
       const modelRepo = AppDataSource.getRepository(AIModel);
       const modelConfig = await modelRepo.findOne({
         where: { providerId, modelId, userId: 1 },
       });
-      
+
       const apiUrl = `${provider.baseUrl}/chat/completions`;
       const capabilities = modelConfig?.capabilities;
       const thinkingConfig = capabilities?.thinking;
       const streamingConfig = capabilities?.streaming;
       const functionCallingSupported = capabilities?.functionCalling?.supported;
       const visionSupported = capabilities?.vision?.supported;
-      
+
       // 视觉模型消息格式转换函数
       const convertToVisionFormat = (msg: any) => {
         if (msg.role === "system") {
@@ -642,15 +642,15 @@ export function createApp(config: ServerConfig = {}) {
         }
         return msg;
       };
-      
+
       // 预先计算工具是否启用
       const functionCallingEnabled = capabilities?.functionCalling?.supported !== false;
       const shouldEnableTools = enableTools !== false && functionCallingEnabled;
-      
+
       // 构建系统提示
       let systemMessage = messages.find((m: any) => m.role === "system");
       const userMessages = messages.filter((m: any) => m.role !== "system");
-      
+
       // 如果有文章上下文，添加到系统提示中
       if (articleContext) {
         let contextInfo = `\n\n当前用户正在编辑一篇文章：
@@ -665,7 +665,7 @@ export function createApp(config: ServerConfig = {}) {
 
 **重要提示**：read_article 工具返回的内容包含行号前缀（格式："行号 | 内容"）。行号仅用于定位，在使用 replace_content 等工具时，请勿在 search 参数中包含行号前缀，只提供实际的文本内容。`;
         }
-        
+
         if (systemMessage) {
           systemMessage = {
             ...systemMessage,
@@ -678,18 +678,18 @@ export function createApp(config: ServerConfig = {}) {
           };
         }
       }
-      
+
       // 组装最终消息
-      let finalMessages = systemMessage 
+      let finalMessages = systemMessage
         ? [systemMessage, ...userMessages]
         : userMessages;
-      
+
       // 如果是视觉模型，转换消息格式
       if (visionSupported) {
         finalMessages = finalMessages.map(convertToVisionFormat);
         logStep(`视觉模型检测: 已转换 ${finalMessages.length} 条消息为视觉格式`);
       }
-      
+
       // 构建请求体
       const requestBody: Record<string, any> = {
         model: modelId,
@@ -698,33 +698,33 @@ export function createApp(config: ServerConfig = {}) {
         temperature: modelConfig?.parameters?.temperature || 0.7,
         stream: streamingConfig?.supported !== false && streamingConfig?.enabled !== false,
       };
-      
+
       // 添加工具定义
       logStep(`工具配置: enableTools=${enableTools}, functionCallingSupported=${functionCallingEnabled}, 最终=${shouldEnableTools}`);
-      
+
       if (shouldEnableTools) {
         const tools = formatToolsForAPI();
         if (tools.length > 0) {
           requestBody.tools = tools;
           requestBody.tool_choice = "auto";
-          
+
           // 智谱 AI 特殊支持
           const isZhipuAI = provider.apiType === "zhipu";
           if (isZhipuAI && requestBody.stream) {
             requestBody.tool_stream = true;
             logStep(`智谱 AI 检测: 已启用 tool_stream`);
           }
-          
+
           logStep(`已添加 ${tools.length} 个工具: ${tools.map(t => t.function.name).join(', ')}`);
         }
       } else {
         logStep(`工具调用已禁用`);
       }
-      
+
       // 添加深度思考配置
       if (thinkingConfig?.supported) {
         const apiFormat = thinkingConfig.apiFormat || "standard";
-        
+
         if (thinkingEnabled) {
           if (apiFormat === "openai") {
             requestBody.reasoning = {
@@ -745,11 +745,11 @@ export function createApp(config: ServerConfig = {}) {
           }
         }
       }
-      
+
       logStep("开始发起流式 API 请求");
       logStep(`请求体: tools=${requestBody.tools?.length || 0}个, tool_choice=${requestBody.tool_choice || '无'}`);
       console.log(`${logPrefix} 完整请求体:`, JSON.stringify(requestBody, null, 2));
-      
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -758,25 +758,25 @@ export function createApp(config: ServerConfig = {}) {
         },
         body: JSON.stringify(requestBody),
       });
-      
+
       logStep(`API 响应返回: status=${response.status}`);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = (errorData as any).error?.message || 
+        const errorMessage = (errorData as any).error?.message ||
                             `HTTP ${response.status}: ${response.statusText}`;
         logStep(`错误: ${errorMessage}`);
         return c.json({ error: errorMessage }, 400);
       }
-      
+
       const contentType = response.headers.get("content-type") || "";
-      const isStream = contentType.includes("text/event-stream") || 
+      const isStream = contentType.includes("text/event-stream") ||
                        contentType.includes("application/octet-stream") ||
                        (response.ok && response.body);
-      
+
       if (isStream && response.body) {
         logStep("开始处理 SSE 流式响应");
-        
+
         return streamSSE(c, async (stream) => {
           const reader = response.body!.getReader();
           const decoder = new TextDecoder();
@@ -797,7 +797,7 @@ export function createApp(config: ServerConfig = {}) {
           let chunkCount = 0;
           let firstChunkTime = 0;
           let isReasoning = false;
-          
+
           try {
             while (true) {
               const { done, value } = await reader.read();
@@ -805,35 +805,35 @@ export function createApp(config: ServerConfig = {}) {
                 logStep(`流式读取完成: 共 ${chunkCount} 个数据块`);
                 break;
               }
-              
+
               chunkCount++;
               if (chunkCount === 1) {
                 firstChunkTime = Date.now() - startTime;
                 logStep(`收到首个数据块 (首字节延迟: ${firstChunkTime}ms)`);
               }
-              
+
               buffer += decoder.decode(value, { stream: true });
               const lines = buffer.split("\n");
               buffer = lines.pop() || "";
-              
+
               for (const line of lines) {
                 const trimmedLine = line.trim();
                 if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
                 if (!trimmedLine.startsWith("data: ")) continue;
-                
+
                 try {
                   const jsonStr = trimmedLine.slice(6);
                   const data = JSON.parse(jsonStr);
                   const delta = data.choices?.[0]?.delta || {};
                   const content = delta.content || "";
                   const reasoningContent = delta.reasoning_content || "";
-                  
+
                   // 处理工具调用
                   if (delta.tool_calls) {
                     for (const toolCall of delta.tool_calls) {
                       const index = toolCall.index;
                       const isZhipuFormat = toolCall.argumentsDelta !== undefined;
-                      
+
                       if (isZhipuFormat) {
                         // 智谱 AI tool_stream 格式处理
                         if (index !== undefined && index >= toolCalls.length) {
@@ -847,7 +847,7 @@ export function createApp(config: ServerConfig = {}) {
                           };
                           toolCalls.push(newToolCall);
                           currentToolCallIndex = index;
-                          
+
                           if (newToolCall.function.name) {
                             await stream.writeSSE({
                               event: "tool_call_start",
@@ -859,7 +859,7 @@ export function createApp(config: ServerConfig = {}) {
                               }),
                             });
                           }
-                          
+
                           if (toolCall.argumentsDelta) {
                             await stream.writeSSE({
                               event: "tool_call_arguments",
@@ -873,11 +873,11 @@ export function createApp(config: ServerConfig = {}) {
                           }
                         } else if (index !== undefined && index < toolCalls.length) {
                           toolCalls[index].function.arguments += toolCall.argumentsDelta || "";
-                          
+
                           if (toolCall.id) {
                             toolCalls[index].id = toolCall.id;
                           }
-                          
+
                           if (toolCall.function?.name && !toolCalls[index].function.name) {
                             toolCalls[index].function.name = toolCall.function.name;
                             await stream.writeSSE({
@@ -890,7 +890,7 @@ export function createApp(config: ServerConfig = {}) {
                               }),
                             });
                           }
-                          
+
                           if (toolCall.argumentsDelta) {
                             await stream.writeSSE({
                               event: "tool_call_arguments",
@@ -916,7 +916,7 @@ export function createApp(config: ServerConfig = {}) {
                           };
                           toolCalls.push(newToolCall);
                           currentToolCallIndex = index;
-                          
+
                           if (newToolCall.function.name) {
                             await stream.writeSSE({
                               event: "tool_call_start",
@@ -930,7 +930,7 @@ export function createApp(config: ServerConfig = {}) {
                           }
                         } else if (currentToolCallIndex >= 0 && toolCall.function?.arguments) {
                           toolCalls[currentToolCallIndex].function.arguments += toolCall.function.arguments;
-                          
+
                           await stream.writeSSE({
                             event: "tool_call_arguments",
                             data: JSON.stringify({
@@ -941,14 +941,14 @@ export function createApp(config: ServerConfig = {}) {
                             }),
                           });
                         }
-                        
+
                         if (toolCall.id && currentToolCallIndex >= 0) {
                           toolCalls[currentToolCallIndex].id = toolCall.id;
                         }
                         if (toolCall.function?.name && currentToolCallIndex >= 0) {
                           const prevName = toolCalls[currentToolCallIndex].function.name;
                           toolCalls[currentToolCallIndex].function.name = toolCall.function.name;
-                          
+
                           if (!prevName && toolCall.function.name) {
                             await stream.writeSSE({
                               event: "tool_call_start",
@@ -964,7 +964,7 @@ export function createApp(config: ServerConfig = {}) {
                       }
                     }
                   }
-                  
+
                   // 处理思维链
                   if (reasoningContent) {
                     if (!isReasoning) {
@@ -974,14 +974,14 @@ export function createApp(config: ServerConfig = {}) {
                         data: JSON.stringify({ message: "开始深度思考..." }),
                       });
                     }
-                    
+
                     fullReasoning += reasoningContent;
                     await stream.writeSSE({
                       event: "reasoning",
                       data: JSON.stringify({ content: reasoningContent }),
                     });
                   }
-                  
+
                   // 处理正常内容
                   if (content) {
                     if (isReasoning) {
@@ -991,20 +991,20 @@ export function createApp(config: ServerConfig = {}) {
                         data: JSON.stringify({ message: "思考完成，开始回答..." }),
                       });
                     }
-                    
+
                     fullContent += content;
                     await stream.writeSSE({
                       event: "content",
                       data: JSON.stringify({ content }),
                     });
                   }
-                  
+
                   // 获取 usage 信息
                   if (data.usage) {
                     promptTokens = data.usage.prompt_tokens || 0;
                     completionTokens = data.usage.completion_tokens || 0;
                   }
-                  
+
                   // 检查 finish_reason
                   const finishReason = data.choices?.[0]?.finish_reason;
                   if (finishReason) {
@@ -1018,25 +1018,25 @@ export function createApp(config: ServerConfig = {}) {
                 }
               }
             }
-            
+
             // 发送工具调用事件
             if (toolCalls.length > 0) {
               logStep(`检测到 ${toolCalls.length} 个工具调用`);
-              
+
               const toolCallsWithLocation = toolCalls.map(tc => ({
                 ...tc,
                 executionLocation: getToolExecutionLocation(tc.function.name) || "frontend",
               }));
-              
+
               await stream.writeSSE({
                 event: "tool_calls",
                 data: JSON.stringify({ toolCalls: toolCallsWithLocation }),
               });
             }
-            
+
             // 发送完成事件
             const duration = Date.now() - startTime;
-            
+
             await stream.writeSSE({
               event: "done",
               data: JSON.stringify({
@@ -1052,12 +1052,12 @@ export function createApp(config: ServerConfig = {}) {
                 },
               }),
             });
-            
+
             logStep(`请求完成 - 总耗时: ${duration}ms`);
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : "流处理错误";
             logStep(`流处理错误: ${errorMsg}`);
-            
+
             await stream.writeSSE({
               event: "error",
               data: JSON.stringify({ error: errorMsg }),
@@ -1065,12 +1065,12 @@ export function createApp(config: ServerConfig = {}) {
           }
         });
       }
-      
+
       // 非流式响应处理
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
       const responseToolCalls = data.choices?.[0]?.message?.tool_calls || [];
-      
+
       return c.json({
         success: true,
         content,
@@ -1085,7 +1085,7 @@ export function createApp(config: ServerConfig = {}) {
       const errorMsg = error instanceof Error ? error.message : "请求失败";
       logStep(`请求异常: ${errorMsg}`);
       console.error(`${logPrefix} 请求异常:`, error);
-      
+
       return c.json({ error: errorMsg }, 500);
     }
   });
@@ -1096,31 +1096,31 @@ export function createApp(config: ServerConfig = {}) {
       // 验证登录状态
       const authHeader = c.req.header("authorization");
       const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
-      
+
       if (!token) {
         return c.json({ error: "未登录" }, 401);
       }
-      
+
       const session = await validateSession(token);
       if (!session) {
         return c.json({ error: "登录已过期" }, 401);
       }
-      
+
       const body = await c.req.json();
       const { toolCallId, toolName, arguments: argsString } = body;
-      
+
       if (!toolCallId || !toolName) {
         return c.json({ error: "缺少必要参数" }, 400);
       }
-      
+
       // 验证是否为后端工具
       const location = getToolExecutionLocation(toolName);
       if (location !== "backend") {
-        return c.json({ 
-          error: `工具 ${toolName} 不是后端工具，应在前端执行` 
+        return c.json({
+          error: `工具 ${toolName} 不是后端工具，应在前端执行`
         }, 400);
       }
-      
+
       // 解析参数
       let args: Record<string, any> = {};
       try {
@@ -1128,20 +1128,20 @@ export function createApp(config: ServerConfig = {}) {
       } catch {
         return c.json({ error: "参数解析失败" }, 400);
       }
-      
+
       // 执行工具
       console.log(`[AI Tool] 执行后端工具: ${toolName}`, args);
       const result = await executeBackendTool(toolName, args);
       console.log(`[AI Tool] 工具执行结果:`, result);
-      
+
       return c.json({
         toolCallId,
         ...result,
       });
     } catch (error) {
       console.error("[AI Tool] 工具执行异常:", error);
-      return c.json({ 
-        error: error instanceof Error ? error.message : "工具执行失败" 
+      return c.json({
+        error: error instanceof Error ? error.message : "工具执行失败"
       }, 500);
     }
   });
@@ -1151,47 +1151,47 @@ export function createApp(config: ServerConfig = {}) {
     try {
       const body = await c.req.json();
       const { baseUrl } = body;
-      
+
       if (!baseUrl) {
         return c.json({ error: "缺少 baseUrl 参数" }, 400);
       }
-      
+
       const results: { step: string; duration: number }[] = [];
       const startTime = Date.now();
-      
+
       // 解析 URL
       const urlObj = new URL(baseUrl);
       const hostname = urlObj.hostname;
       results.push({ step: "URL解析", duration: Date.now() - startTime });
-      
+
       // DNS 查询（通过简单的 fetch 触发）
       const dnsStart = Date.now();
       try {
         const testUrl = `${baseUrl}/models`;
         console.log(`[AI Warmup] 测试连接: ${testUrl}`);
-        
+
         const response = await fetch(testUrl, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
         });
-        
-        results.push({ 
-          step: `连接测试 (status=${response.status})`, 
-          duration: Date.now() - dnsStart 
+
+        results.push({
+          step: `连接测试 (status=${response.status})`,
+          duration: Date.now() - dnsStart
         });
       } catch (error) {
-        results.push({ 
-          step: `连接测试失败: ${error instanceof Error ? error.message : "未知错误"}`, 
-          duration: Date.now() - dnsStart 
+        results.push({
+          step: `连接测试失败: ${error instanceof Error ? error.message : "未知错误"}`,
+          duration: Date.now() - dnsStart
         });
       }
-      
+
       const totalDuration = Date.now() - startTime;
-      
+
       console.log(`[AI Warmup] ${hostname} 预热完成:`, results);
-      
+
       return c.json({
         success: true,
         hostname,
@@ -1200,8 +1200,8 @@ export function createApp(config: ServerConfig = {}) {
       });
     } catch (error) {
       console.error("[AI Warmup] 预热失败:", error);
-      return c.json({ 
-        error: error instanceof Error ? error.message : "预热失败" 
+      return c.json({
+        error: error instanceof Error ? error.message : "预热失败"
       }, 500);
     }
   });
@@ -1261,7 +1261,7 @@ export async function startServer(config: ServerConfig = {}): Promise<{
 }> {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
   const { port, host, dataDir } = finalConfig;
-  
+
   // 确保 data 目录存在
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });
