@@ -51,6 +51,24 @@ function autoTableHeaders(html: string): string {
 }
 
 /**
+ * 清理 HTML 中图片的 alt 属性
+ * Word 自动生成的图片描述可能包含换行符，这会破坏 Markdown 图片语法
+ */
+function cleanImageAlt(html: string): string {
+  return html.replace(
+    /<img([^>]*)alt=(["'])([\s\S]*?)\2([^>]*)>/gi,
+    (_match, before, quote, alt, after) => {
+      // 清理 alt 文本：移除换行符，压缩多余空格
+      const cleanAlt = alt
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return `<img${before}alt=${quote}${cleanAlt}${quote}${after}>`;
+    }
+  );
+}
+
+/**
  * 清理 Markdown 中的特殊字符
  */
 function cleanMarkdown(md: string): string {
@@ -115,8 +133,9 @@ export async function convertWordToMarkdown(
     throw new Error("Word 文档内容为空或无法解析");
   }
 
-  // 处理表格头
-  const html = autoTableHeaders(mammothResult.value);
+  // 处理表格头和图片 alt 属性
+  let html = autoTableHeaders(mammothResult.value);
+  html = cleanImageAlt(html);
   console.log("处理后 HTML:", html.substring(0, 500));
 
   // 转换为 Markdown
