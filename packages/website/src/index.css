@@ -1,82 +1,145 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Tailwind v4 暗色模式变体 - 基于 class 切换 */
 @custom-variant dark (&:is(.dark *));
 
+/* 
+ * 主题系统设计说明:
+ * 1. 使用 CSS 变量实现主题切换
+ * 2. :root 定义亮色主题
+ * 3. .dark 类定义暗色主题
+ * 4. @theme inline 将变量映射到 Tailwind 颜色系统
+ */
+
+/* 亮色主题变量 */
+:root {
+  --radius: 0.5rem;
+  
+  /* 基础颜色 */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 9%;
+  
+  /* 卡片 */
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 9%;
+  
+  /* 弹出层 */
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 9%;
+  
+  /* 主色调 - Ant Design 蓝色 #1677ff */
+  --primary: 215 100% 55%;
+  --primary-foreground: 0 0% 100%;
+  
+  /* 次要色 */
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 9%;
+  
+  /* 静音色 */
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  
+  /* 强调色 */
+  --accent: 215 100% 97%;
+  --accent-foreground: 215 100% 45%;
+  
+  /* 危险色 */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  
+  /* 边框和输入框 */
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 215 100% 55%;
+  
+  /* 图表颜色 - Ant Design 色板 */
+  --chart-1: 215 100% 55%;
+  --chart-2: 160 84% 39%;
+  --chart-3: 291 64% 42%;
+  --chart-4: 43 96% 56%;
+  --chart-5: 6 78% 57%;
+}
+
+/* 暗色主题变量 */
+.dark {
+  --background: 220 13% 8%;
+  --foreground: 0 0% 95%;
+  
+  --card: 220 13% 11%;
+  --card-foreground: 0 0% 95%;
+  
+  --popover: 220 13% 11%;
+  --popover-foreground: 0 0% 95%;
+  
+  /* Ant Design 蓝色暗色模式 #1668dc */
+  --primary: 215 85% 48%;
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 220 13% 18%;
+  --secondary-foreground: 0 0% 95%;
+  
+  --muted: 220 13% 18%;
+  --muted-foreground: 0 0% 60%;
+  
+  --accent: 220 13% 18%;
+  --accent-foreground: 0 0% 95%;
+  
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  
+  --border: 220 13% 20%;
+  --input: 220 13% 20%;
+  --ring: 215 85% 48%;
+  
+  /* 图表颜色 - Ant Design 暗色色板 */
+  --chart-1: 215 85% 55%;
+  --chart-2: 160 70% 45%;
+  --chart-3: 291 55% 55%;
+  --chart-4: 43 90% 55%;
+  --chart-5: 6 70% 55%;
+}
+
+/* Tailwind v4 主题映射 - 使用 hsl() 函数引用变量 */
 @theme inline {
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.145 0 0);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.145 0 0);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.145 0 0);
-  --color-primary: oklch(0.55 0.2 260);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.97 0 0);
-  --color-secondary-foreground: oklch(0.205 0 0);
-  --color-muted: oklch(0.97 0 0);
-  --color-muted-foreground: oklch(0.556 0 0);
-  --color-accent: oklch(0.97 0 0);
-  --color-accent-foreground: oklch(0.205 0 0);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(0.577 0.245 27.325);
-  --color-border: oklch(0.922 0 0);
-  --color-input: oklch(0.922 0 0);
-  --color-ring: oklch(0.55 0.2 260);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  
+  /* 圆角 */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius: 0.5rem;
 }
 
-:root {
-  --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.2 260);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0.2 260);
-}
-
-.dark {
-  --background: oklch(0.12 0.01 260);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.16 0.01 260);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.16 0.01 260);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.65 0.22 260);
-  --primary-foreground: oklch(0.12 0.01 260);
-  --secondary: oklch(0.22 0.02 260);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.22 0.02 260);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.22 0.02 260);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.65 0.22 260);
-}
-
+/* 基础样式 */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  
   body {
     @apply bg-background text-foreground antialiased;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -91,7 +154,7 @@ html {
 /* 全局滚动条样式 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.7 0 0 / 0.3) transparent;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -104,43 +167,30 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.6 0 0 / 0.3);
+  background: hsl(var(--muted-foreground) / 0.3);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0 / 0.5);
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 
 /* 渐变背景效果 */
 .gradient-bg {
   background: linear-gradient(
     135deg,
-    oklch(0.97 0.02 260) 0%,
-    oklch(0.99 0.01 200) 50%,
-    oklch(0.98 0.02 280) 100%
-  );
-}
-
-.dark .gradient-bg {
-  background: linear-gradient(
-    135deg,
-    oklch(0.15 0.03 260) 0%,
-    oklch(0.12 0.02 200) 50%,
-    oklch(0.14 0.03 280) 100%
+    hsl(var(--primary) / 0.05) 0%,
+    hsl(var(--background)) 50%,
+    hsl(var(--primary) / 0.08) 100%
   );
 }
 
 /* 玻璃效果 */
 .glass {
-  background: oklch(1 0 0 / 0.7);
+  background: hsl(var(--background) / 0.8);
   backdrop-filter: blur(12px);
-  border: 1px solid oklch(0 0 0 / 0.05);
-}
-
-.dark .glass {
-  background: oklch(0.15 0.01 260 / 0.7);
-  border: 1px solid oklch(1 0 0 / 0.1);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid hsl(var(--border) / 0.5);
 }
 
 /* 动画 */
@@ -159,13 +209,67 @@ html {
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 20px oklch(0.55 0.2 260 / 0.3);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
   }
   50% {
-    box-shadow: 0 0 40px oklch(0.55 0.2 260 / 0.5);
+    box-shadow: 0 0 40px hsl(var(--primary) / 0.5);
   }
 }
 
 .animate-pulse-glow {
   animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Markdown 内容样式 */
+.markdown-content h2 {
+  @apply text-2xl font-bold mt-10 mb-6;
+}
+
+.markdown-content h3 {
+  @apply text-xl font-semibold mt-8 mb-4;
+}
+
+.markdown-content p {
+  @apply my-4 leading-relaxed;
+}
+
+.markdown-content ul {
+  @apply list-disc list-inside space-y-2 my-4 ml-4;
+}
+
+.markdown-content ol {
+  @apply list-decimal list-inside space-y-2 my-4 ml-4;
+}
+
+.markdown-content code {
+  @apply px-1.5 py-0.5 rounded bg-muted text-sm font-mono;
+}
+
+.markdown-content pre {
+  @apply p-4 rounded-lg bg-muted overflow-x-auto my-4;
+}
+
+.markdown-content pre code {
+  @apply p-0 bg-transparent;
+}
+
+.markdown-content a {
+  @apply text-primary hover:underline;
+}
+
+.markdown-content table {
+  @apply w-full border-collapse my-4;
+}
+
+.markdown-content th,
+.markdown-content td {
+  @apply border border-border px-4 py-2 text-left;
+}
+
+.markdown-content th {
+  @apply bg-muted font-semibold;
+}
+
+.markdown-content blockquote {
+  @apply border-l-4 border-primary pl-4 my-4 italic text-muted-foreground;
 }

@@ -7,14 +7,82 @@ import {
   Moon,
   Sun,
   Feather,
+  Monitor,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+
+type Theme = "light" | "dark" | "system";
+
+function useTheme() {
+  const [theme, setTheme] = useState<Theme>("system");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
+
+  // 获取系统主题
+  const getSystemTheme = useCallback((): "light" | "dark" => {
+    if (typeof window === "undefined") return "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }, []);
+
+  // 应用主题到 DOM
+  const applyTheme = useCallback((resolvedTheme: "light" | "dark") => {
+    const root = document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(resolvedTheme);
+    setResolvedTheme(resolvedTheme);
+  }, []);
+
+  // 初始化主题
+  useEffect(() => {
+    const stored = localStorage.getItem("theme") as Theme | null;
+    const initialTheme = stored || "system";
+    setTheme(initialTheme);
+    
+    const resolved = initialTheme === "system" ? getSystemTheme() : initialTheme;
+    applyTheme(resolved);
+  }, [getSystemTheme, applyTheme]);
+
+  // 监听系统主题变化
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      if (theme === "system") {
+        applyTheme(getSystemTheme());
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [theme, getSystemTheme, applyTheme]);
+
+  // 切换主题
+  const setThemeValue = useCallback((newTheme: Theme) => {
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    const resolved = newTheme === "system" ? getSystemTheme() : newTheme;
+    applyTheme(resolved);
+  }, [getSystemTheme, applyTheme]);
+
+  // 循环切换: light -> dark -> system -> light
+  const cycleTheme = useCallback(() => {
+    const next: Theme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+    setThemeValue(next);
+  }, [theme, setThemeValue]);
+
+  return { theme, resolvedTheme, setTheme: setThemeValue, cycleTheme };
+}
+
+function ThemeIcon({ theme, resolvedTheme }: { theme: Theme; resolvedTheme: "light" | "dark" }) {
+  if (theme === "system") {
+    return <Monitor className="w-5 h-5" />;
+  }
+  return resolvedTheme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />;
+}
 
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
+  const { theme, resolvedTheme, cycleTheme } = useTheme();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -23,21 +91,6 @@ function Header() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    const dark = localStorage.getItem("theme") === "dark";
-    setIsDark(dark);
-    if (dark) {
-      document.documentElement.classList.add("dark");
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    localStorage.setItem("theme", newDark ? "dark" : "light");
-    document.documentElement.classList.toggle("dark", newDark);
-  };
 
   const navItems = [
     { label: "首页", href: "/", isHash: false },
@@ -95,14 +148,15 @@ function Header() {
           {/* Actions */}
           <div className="flex items-center gap-2">
             <button
-              onClick={toggleTheme}
+              onClick={cycleTheme}
               className="p-2 rounded-lg hover:bg-accent transition-colors"
               aria-label="切换主题"
+              title={theme === "system" ? "跟随系统" : theme === "dark" ? "暗色模式" : "亮色模式"}
             >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              <ThemeIcon theme={theme} resolvedTheme={resolvedTheme} />
             </button>
             <a
-              href="https://github.com/yeyouchuan/pen-bridge"
+              href="https://github.com/ZeroHawkeye/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 rounded-lg hover:bg-accent transition-colors hidden sm:flex"
@@ -156,7 +210,7 @@ function Header() {
               )
             )}
             <a
-              href="https://github.com/yeyouchuan/pen-bridge"
+              href="https://github.com/ZeroHawkeye/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-2"
@@ -204,7 +258,7 @@ function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <a
-                  href="https://github.com/yeyouchuan/pen-bridge"
+                  href="https://github.com/ZeroHawkeye/PenBridge"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -214,7 +268,7 @@ function Footer() {
               </li>
               <li>
                 <a
-                  href="https://github.com/yeyouchuan/pen-bridge/releases"
+                  href="https://github.com/ZeroHawkeye/PenBridge/releases"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -224,7 +278,7 @@ function Footer() {
               </li>
               <li>
                 <a
-                  href="https://github.com/yeyouchuan/pen-bridge/issues"
+                  href="https://github.com/ZeroHawkeye/PenBridge/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -242,7 +296,7 @@ function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <a
-              href="https://github.com/yeyouchuan/pen-bridge"
+              href="https://github.com/ZeroHawkeye/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-foreground transition-colors"

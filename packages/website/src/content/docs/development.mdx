@@ -1,0 +1,69 @@
+# 开发指南
+
+## 本地开发
+
+PenBridge 是开源项目，欢迎贡献代码。
+
+### 技术栈
+
+- **前端**: React 19 + TypeScript + Tailwind CSS
+- **桌面**: Electron
+- **后端**: Bun + Hono + tRPC
+- **数据库**: SQLite (sql.js)
+
+### 开发环境
+
+```bash
+# 克隆仓库
+git clone https://github.com/ZeroHawkeye/PenBridge.git
+cd PenBridge
+
+# 安装依赖
+bun install
+
+# 启动开发服务器
+bun run dev:server  # 启动后端
+bun run dev:web     # 启动前端
+```
+
+### 项目结构
+
+```
+PenBridge/
+├── electron/        # Electron 桌面应用
+├── packages/
+│   ├── server/      # 后端服务
+│   ├── web/         # 前端应用
+│   ├── shared/      # 共享类型
+│   └── website/     # 官网
+└── docs/            # 文档
+```
+
+### 贡献代码
+
+1. Fork 仓库
+2. 创建功能分支
+3. 提交代码
+4. 发起 Pull Request
+
+详细指南请参考 [CONTRIBUTING.md](https://github.com/ZeroHawkeye/PenBridge/blob/main/CONTRIBUTING.md)
+
+## 代码规范
+
+### TypeScript
+
+- 使用严格模式
+- 优先使用函数式组件
+- 使用 ESLint + Prettier 格式化
+
+### Git 提交
+
+- 使用中文提交信息
+- 遵循 Conventional Commits 规范
+- 每个 PR 聚焦单一功能
+
+## API 文档
+
+后端使用 tRPC，API 类型自动推导，无需手动编写文档。
+
+查看 `packages/server/src/trpc/router.ts` 了解所有可用接口。

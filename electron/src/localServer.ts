@@ -19,16 +19,10 @@ let isServerRunning = false;
 
 /**
  * 获取服务器可执行文件路径
- * 生产环境：使用 Bun 编译的独立二进制文件（无需 Node.js）
- * 开发环境：使用 bun 运行源码
+ * 使用 Bun 编译的独立二进制文件（无需 Node.js）
  */
 function getServerExecutablePath(): string | null {
-  if (!app.isPackaged) {
-    // 开发环境返回 null，使用 bun 运行
-    return null;
-  }
-  
-  // 生产环境：查找 Bun 编译的二进制文件
+  // 查找 Bun 编译的二进制文件
   const exeName = process.platform === "win32" ? "pen-bridge-server.exe" : "pen-bridge-server";
   
   const possiblePaths = [
@@ -121,8 +115,8 @@ async function waitForServerReady(url: string, maxRetries: number = 60): Promise
 /**
  * 启动本地服务器
  * 
- * 在生产环境中，会启动打包后的 server
- * 在开发环境中，需要先构建 server
+ * 启动 Bun 编译的独立二进制服务器
+ * 注意：此函数仅在生产环境中被调用（开发环境使用独立的 dev:server）
  */
 export async function startLocalServer(): Promise<{
   success: boolean;
@@ -158,70 +152,37 @@ export async function startLocalServer(): Promise<{
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    // 确定 server 可执行文件路径
-    // 开发环境：使用 bun 运行 server 源码
-    // 生产环境：使用打包后的 server
-    const isDev = !app.isPackaged;
+    // 查找 Bun 编译的二进制可执行文件
+    const serverPath = getServerExecutablePath();
     
-    let serverStarted = false;
+    console.log("[Local Server] resourcesPath:", process.resourcesPath);
+    console.log("[Local Server] appPath:", app.getAppPath());
     
-    if (isDev) {
-      // 开发环境：使用 bun 运行
-      const serverPath = path.join(__dirname, "../../packages/server/src/index.ts");
-      
-      console.log(`[Local Server] 开发模式启动，路径: ${serverPath}`);
-      
-      // 设置环境变量
-      const env = {
-        ...process.env,
-        PEN_BRIDGE_PORT: String(LOCAL_SERVER_PORT),
-        PEN_BRIDGE_HOST: LOCAL_SERVER_HOST,
-        PEN_BRIDGE_DATA_DIR: dataDir,
+    if (!serverPath) {
+      console.log("[Local Server] 未找到服务器可执行文件");
+      return {
+        success: false,
+        error: "未找到服务器文件，请确保应用已正确安装。如果问题持续存在，请重新安装应用。",
       };
-      
-      // 使用 bun 运行
-      serverProcess = spawn("bun", ["run", serverPath], {
-        cwd: path.join(__dirname, "../../packages/server"),
-        env,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      
-      serverStarted = true;
-    } else {
-      // 生产环境：查找 Bun 编译的二进制可执行文件
-      const serverPath = getServerExecutablePath();
-      
-      console.log("[Local Server] resourcesPath:", process.resourcesPath);
-      console.log("[Local Server] appPath:", app.getAppPath());
-      
-      if (!serverPath) {
-        console.log("[Local Server] 未找到服务器可执行文件");
-        return {
-          success: false,
-          error: "未找到服务器文件，请确保应用已正确安装。如果问题持续存在，请重新安装应用。",
-        };
-      }
-      
-      console.log(`[Local Server] 生产模式启动，路径: ${serverPath}`);
-      
-      // 设置环境变量
-      const env = {
-        ...process.env,
-        PEN_BRIDGE_PORT: String(LOCAL_SERVER_PORT),
-        PEN_BRIDGE_HOST: LOCAL_SERVER_HOST,
-        PEN_BRIDGE_DATA_DIR: dataDir,
-      };
-      
-      // 直接运行 Bun 编译的独立二进制文件（无需 Node.js）
-      serverProcess = spawn(serverPath, [], {
-        env,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      
-      serverStarted = true;
     }
+    
+    console.log(`[Local Server] 启动服务器，路径: ${serverPath}`);
+    
+    // 设置环境变量
+    const env = {
+      ...process.env,
+      PEN_BRIDGE_PORT: String(LOCAL_SERVER_PORT),
+      PEN_BRIDGE_HOST: LOCAL_SERVER_HOST,
+      PEN_BRIDGE_DATA_DIR: dataDir,
+    };
+    
+    // 直接运行 Bun 编译的独立二进制文件（无需 Node.js）
+    serverProcess = spawn(serverPath, [], {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
-    if (!serverStarted || !serverProcess) {
+    if (!serverProcess) {
       return { success: false, error: "无法启动服务器进程" };
     }
 

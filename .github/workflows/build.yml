@@ -210,10 +210,10 @@ jobs:
         working-directory: electron
 
       - name: Package for macOS (x64 + arm64)
-        run: npm run dist:mac
+        # 使用 --publish never 阻止 electron-builder 自动发布
+        # 发布由最后的 release job 统一处理
+        run: npx electron-builder --mac --publish never
         working-directory: electron
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify macOS build artifacts exist
         run: |
@@ -290,10 +290,10 @@ jobs:
         working-directory: electron
 
       - name: Package for Windows (NSIS installer x64 + arm64)
-        run: npm run dist:win
+        # 使用 --publish never 阻止 electron-builder 自动发布
+        # 发布由最后的 release job 统一处理
+        run: npx electron-builder --win --publish never
         working-directory: electron
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Windows build artifacts exist
         shell: pwsh
@@ -373,10 +373,10 @@ jobs:
           sudo apt-get install -y dpkg fakeroot rpm
 
       - name: Package for Linux (x64 + arm64)
-        run: npm run dist:linux
+        # 使用 --publish never 阻止 electron-builder 自动发布
+        # 发布由最后的 release job 统一处理
+        run: npx electron-builder --linux --publish never
         working-directory: electron
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Linux build artifacts exist
         run: |
