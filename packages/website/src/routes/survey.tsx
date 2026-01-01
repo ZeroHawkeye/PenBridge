@@ -13,9 +13,26 @@ import {
   Loader2,
   ExternalLink,
   RefreshCw,
+  LogIn,
+  LogOut,
+  Github,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+
+// 用户信息类型
+interface GitHubUser {
+  id: number;
+  login: string;
+  avatar_url: string;
+  name: string | null;
+}
+
+// 认证数据类型
+interface AuthData {
+  token: string;
+  user: GitHubUser;
+}
 
 // 功能类型
 interface Feature {
@@ -66,17 +83,65 @@ function SurveyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [votedItems, setVotedItems] = useState<Set<string>>(() => {
-    // 从 localStorage 恢复投票状态（仅用于本地 UI 反馈）
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("penbridge-votes");
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    }
-    return new Set();
-  });
+  // 用户认证状态
+  const [user, setUser] = useState<GitHubUser | null>(null);
+  const [userToken, setUserToken] = useState<string | null>(null);
+  
+  // 投票状态
+  const [votedItems, setVotedItems] = useState<Set<string>>(new Set());
+  const [votingItem, setVotingItem] = useState<string | null>(null);
   
   const [filter, setFilter] = useState<"all" | "voting" | "planned" | "completed">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  // 从 URL hash 或 localStorage 恢复登录状态
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // 检查 URL hash 中的认证数据（OAuth 回调）
+    const hash = window.location.hash;
+    if (hash.startsWith("#auth=")) {
+      try {
+        const encodedData = hash.substring(6);
+        const authData: AuthData = JSON.parse(atob(encodedData));
+        setUser(authData.user);
+        setUserToken(authData.token);
+        // 保存到 localStorage
+        localStorage.setItem("penbridge-auth", JSON.stringify(authData));
+        // 清除 URL hash
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch (e) {
+        console.error("Failed to parse auth data:", e);
+      }
+    } else {
+      // 从 localStorage 恢复登录状态
+      const saved = localStorage.getItem("penbridge-auth");
+      if (saved) {
+        try {
+          const authData: AuthData = JSON.parse(saved);
+          setUser(authData.user);
+          setUserToken(authData.token);
+        } catch {
+          localStorage.removeItem("penbridge-auth");
+        }
+      }
+    }
+
+    // 检查 URL 中的错误参数
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get("error");
+    if (errorParam) {
+      setError(`登录失败: ${errorParam}`);
+      // 清除 URL 参数
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+
+    // 恢复投票状态
+    const savedVotes = localStorage.getItem("penbridge-votes");
+    if (savedVotes) {
+      setVotedItems(new Set(JSON.parse(savedVotes)));
+    }
+  }, []);
 
   // 获取功能列表
   const fetchFeatures = useCallback(async () => {
@@ -84,7 +149,6 @@ function SurveyPage() {
     setError(null);
     
     try {
-      // 尝试从 API 获取数据
       const response = await fetch("/api/features");
       if (!response.ok) {
         throw new Error("Failed to fetch features");
@@ -95,7 +159,6 @@ function SurveyPage() {
       setTotalParticipants(data.totalParticipants);
       setDataSource(data.source);
     } catch {
-      // 如果 API 不可用，使用静态数据
       const staticData = getStaticFeatures();
       setFeatures(staticData.features);
       setTotalVotes(staticData.totalVotes);
@@ -128,16 +191,68 @@ function SurveyPage() {
       return b.votes - a.votes;
     });
 
-  const handleVote = (id: string) => {
-    // 本地 UI 反馈
-    if (votedItems.has(id)) {
-      setVotedItems((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
+  // 登录处理
+  const handleLogin = () => {
+    window.location.href = "/api/auth/github";
+  };
+
+  // 登出处理
+  const handleLogout = () => {
+    setUser(null);
+    setUserToken(null);
+    localStorage.removeItem("penbridge-auth");
+  };
+
+  // 投票处理
+  const handleVote = async (featureId: string) => {
+    if (!user || !userToken) {
+      // 未登录，提示登录
+      setError("请先登录 GitHub 账号后再投票");
+      return;
+    }
+
+    const isVoted = votedItems.has(featureId);
+    const action = isVoted ? "unvote" : "vote";
+    
+    setVotingItem(featureId);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/features", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          featureId,
+          action,
+          userToken,
+        }),
       });
-    } else {
-      setVotedItems((prev) => new Set(prev).add(id));
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || "投票失败");
+      }
+
+      // 更新本地状态
+      if (isVoted) {
+        setVotedItems((prev) => {
+          const next = new Set(prev);
+          next.delete(featureId);
+          return next;
+        });
+      } else {
+        setVotedItems((prev) => new Set(prev).add(featureId));
+      }
+
+      // 刷新数据
+      await fetchFeatures();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "投票失败");
+    } finally {
+      setVotingItem(null);
     }
   };
 
@@ -163,16 +278,50 @@ function SurveyPage() {
             </p>
           </motion.div>
 
+          {/* 用户登录状态 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="mt-8"
+          >
+            {user ? (
+              <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-card border border-border">
+                <img
+                  src={user.avatar_url}
+                  alt={user.login}
+                  className="w-8 h-8 rounded-full"
+                />
+                <span className="text-sm font-medium">{user.name || user.login}</span>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                  title="退出登录"
+                >
+                  <LogOut className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleLogin}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#24292f] text-white font-medium hover:bg-[#24292f]/90 transition-colors"
+              >
+                <Github className="w-5 h-5" />
+                使用 GitHub 登录以投票
+              </button>
+            )}
+          </motion.div>
+
           {/* 统计 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="mt-12 flex items-center justify-center gap-8"
+            className="mt-8 flex items-center justify-center gap-8"
           >
             <div className="text-center">
               <div className="text-3xl font-bold text-primary">
-                {isLoading ? <Loader2 className="w-8 h-8 animate-spin mx-auto" /> : totalVotes + votedItems.size}
+                {isLoading ? <Loader2 className="w-8 h-8 animate-spin mx-auto" /> : totalVotes}
               </div>
               <div className="text-sm text-muted-foreground">总投票数</div>
             </div>
@@ -290,9 +439,21 @@ function SurveyPage() {
 
           {/* 错误提示 */}
           {error && (
-            <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-center mb-8">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-lg bg-destructive/10 text-destructive text-center mb-8 flex items-center justify-center gap-2"
+            >
               {error}
-            </div>
+              {!user && (
+                <button
+                  onClick={handleLogin}
+                  className="underline hover:no-underline"
+                >
+                  立即登录
+                </button>
+              )}
+            </motion.div>
           )}
 
           {/* 功能列表 */}
@@ -301,7 +462,8 @@ function SurveyPage() {
               {filteredFeatures.map((feature, index) => {
                 const status = statusConfig[feature.status];
                 const isVoted = votedItems.has(feature.id);
-                const voteCount = feature.votes + (isVoted ? 1 : 0);
+                const isVoting = votingItem === feature.id;
+                const canVote = feature.status === "voting";
 
                 return (
                   <motion.div
@@ -311,25 +473,29 @@ function SurveyPage() {
                     transition={{ delay: index * 0.05 }}
                     className={cn(
                       "p-5 rounded-xl border border-border bg-card transition-all",
-                      feature.status === "voting" && "hover:border-primary/50 hover:shadow-md"
+                      canVote && "hover:border-primary/50 hover:shadow-md"
                     )}
                   >
                     <div className="flex items-start gap-4">
                       {/* 投票按钮 */}
                       <button
-                        onClick={() => feature.status === "voting" && handleVote(feature.id)}
-                        disabled={feature.status !== "voting"}
+                        onClick={() => canVote && handleVote(feature.id)}
+                        disabled={!canVote || isVoting}
                         className={cn(
-                          "flex flex-col items-center gap-1 p-3 rounded-xl transition-all shrink-0",
-                          feature.status === "voting"
+                          "flex flex-col items-center gap-1 p-3 rounded-xl transition-all shrink-0 min-w-[60px]",
+                          canVote
                             ? isVoted
                               ? "bg-primary text-primary-foreground"
                               : "bg-muted hover:bg-primary/10 text-muted-foreground hover:text-primary"
                             : "bg-muted/50 text-muted-foreground cursor-not-allowed"
                         )}
                       >
-                        <ThumbsUp className={cn("w-5 h-5", isVoted && "fill-current")} />
-                        <span className="text-sm font-semibold">{voteCount}</span>
+                        {isVoting ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <ThumbsUp className={cn("w-5 h-5", isVoted && "fill-current")} />
+                        )}
+                        <span className="text-sm font-semibold">{feature.votes}</span>
                       </button>
 
                       {/* 内容 */}
@@ -339,6 +505,11 @@ function SurveyPage() {
                           <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium", status.color)}>
                             {status.label}
                           </span>
+                          {isVoted && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                              已投票
+                            </span>
+                          )}
                         </div>
                         <p className="text-muted-foreground">{feature.description}</p>
                         <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
@@ -353,6 +524,29 @@ function SurveyPage() {
                 );
               })}
             </div>
+          )}
+
+          {/* 未登录提示 */}
+          {!user && !isLoading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mt-8 p-6 rounded-xl bg-primary/5 border border-primary/10 text-center"
+            >
+              <LogIn className="w-10 h-10 text-primary mx-auto mb-3" />
+              <h3 className="text-lg font-semibold mb-2">登录后参与投票</h3>
+              <p className="text-muted-foreground mb-4">
+                使用 GitHub 账号登录，即可为你喜欢的功能投票
+              </p>
+              <button
+                onClick={handleLogin}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#24292f] text-white font-medium hover:bg-[#24292f]/90 transition-colors"
+              >
+                <Github className="w-5 h-5" />
+                使用 GitHub 登录
+              </button>
+            </motion.div>
           )}
 
           {/* 提交建议 */}
@@ -396,7 +590,7 @@ function SurveyPage() {
               <div>
                 <strong className="text-foreground">关于投票</strong>
                 <p className="text-muted-foreground mt-1">
-                  正式投票请前往{" "}
+                  投票数据会同步到{" "}
                   <a
                     href={DISCUSSIONS_URL}
                     target="_blank"
@@ -404,8 +598,8 @@ function SurveyPage() {
                     className="text-primary hover:underline"
                   >
                     GitHub Discussions
-                  </a>{" "}
-                  使用 👍 表情进行投票，你的投票将被永久记录并影响功能开发优先级。
+                  </a>
+                  ，你的投票将被永久记录并影响功能开发优先级。
                 </p>
               </div>
             </div>
