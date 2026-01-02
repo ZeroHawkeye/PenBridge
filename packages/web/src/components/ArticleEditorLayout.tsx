@@ -33,7 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import MilkdownEditor, { type MilkdownEditorRef } from "@/components/MilkdownEditor";
+import { EditorSwitcher, type EditorSwitcherRef } from "@/components/editors";
 import { TableOfContents, HeadingItem } from "@/components/TableOfContents";
 import { EditorSearchBox } from "@/components/EditorSearchBox";
 import { EditorSkeleton } from "@/components/EditorSkeleton";
@@ -163,7 +163,7 @@ export function ArticleEditorLayout({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   
   // 编辑器实例 ref，用于直接更新内容而不重建编辑器
-  const milkdownEditorRef = useRef<MilkdownEditorRef>(null);
+  const milkdownEditorRef = useRef<EditorSwitcherRef>(null);
 
   // 处理标题点击，滚动到对应位置
   const handleHeadingClick = useCallback((heading: HeadingItem) => {
@@ -645,14 +645,15 @@ export function ArticleEditorLayout({
             {isContentLoading ? (
               <EditorSkeleton />
             ) : (
-              <MilkdownEditor
+              <EditorSwitcher
                 ref={milkdownEditorRef}
-                key={finalEditorKey}
+                editorKey={finalEditorKey}
                 value={content}
                 onChange={onContentChange}
                 placeholder="开始写作..."
                 className="min-h-[calc(100vh-200px)]"
                 articleId={articleId}
+                showSwitcher={true}
               />
             )}
           </div>

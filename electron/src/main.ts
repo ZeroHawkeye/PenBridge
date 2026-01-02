@@ -188,11 +188,11 @@ function registerServerConfigHandlers() {
         url = url.slice(0, -1);
       }
 
-      // 尝试请求根路径健康检查端点
+      // 尝试请求 /health 健康检查端点（与 serverConfig.ts 保持一致）
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
 
-      const response = await fetch(`${url}/`, {
+      const response = await fetch(`${url}/health`, {
         method: "GET",
         signal: controller.signal,
       });

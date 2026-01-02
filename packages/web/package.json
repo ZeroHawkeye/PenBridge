@@ -9,6 +9,13 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@codemirror/commands": "^6.10.1",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.1",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.5.11",
+    "@codemirror/state": "^6.5.3",
+    "@codemirror/view": "^6.39.8",
     "@joplin/turndown": "^4.0.82",
     "@joplin/turndown-plugin-gfm": "^1.0.64",
     "@milkdown/crepe": "^7.17.3",

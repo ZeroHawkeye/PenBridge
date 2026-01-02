@@ -1451,3 +1451,131 @@ a .text-foreground,
   box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.3);
 }
 
+/* ==================== 编辑器切换器样式 ==================== */
+.editor-switcher {
+  position: relative;
+  width: 100%;
+}
+
+/* ==================== CodeMirror 编辑器样式 ==================== */
+.codemirror-editor {
+  min-height: 400px;
+  width: 100%;
+}
+
+.codemirror-editor .cm-editor {
+  min-height: 400px;
+  background: transparent;
+}
+
+.codemirror-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* 选中文字背景 - 确保可见 */
+.codemirror-editor .cm-selectionBackground {
+  background-color: rgba(100, 150, 255, 0.3) !important;
+}
+
+.codemirror-editor .cm-editor.cm-focused .cm-selectionBackground {
+  background-color: rgba(100, 150, 255, 0.4) !important;
+}
+
+.codemirror-editor .cm-selectionLayer .cm-selectionBackground {
+  background-color: rgba(100, 150, 255, 0.3) !important;
+}
+
+.codemirror-editor .cm-editor.cm-focused .cm-selectionLayer .cm-selectionBackground {
+  background-color: rgba(100, 150, 255, 0.4) !important;
+}
+
+/* CodeMirror 滚动条样式 */
+.codemirror-editor .cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  line-height: 1.6;
+}
+
+/* CodeMirror Markdown 语法高亮增强 */
+.codemirror-editor .cm-header {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.codemirror-editor .cm-header-1 {
+  font-size: 1.5em;
+  line-height: 1.3;
+}
+
+.codemirror-editor .cm-header-2 {
+  font-size: 1.3em;
+  line-height: 1.4;
+}
+
+.codemirror-editor .cm-header-3 {
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
+.codemirror-editor .cm-strong {
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.codemirror-editor .cm-emphasis {
+  font-style: italic;
+  color: var(--foreground);
+}
+
+.codemirror-editor .cm-strikethrough {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+.codemirror-editor .cm-link {
+  color: oklch(0.55 0.2 250);
+  text-decoration: underline;
+}
+
+.codemirror-editor .cm-url {
+  color: var(--muted-foreground);
+  font-size: 0.9em;
+}
+
+/* 行内代码 */
+.codemirror-editor .cm-monospace {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  background: var(--muted);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* 代码块语法标记 */
+.codemirror-editor .cm-meta {
+  color: var(--muted-foreground);
+}
+
+/* 引用块 */
+.codemirror-editor .cm-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+/* 列表标记 */
+.codemirror-editor .cm-list {
+  color: var(--primary);
+}
+
+/* 暗色模式适配 */
+.dark .codemirror-editor .cm-activeLine {
+  background: oklch(0.3 0 0 / 0.3);
+}
+
+.dark .codemirror-editor .cm-gutters {
+  background: transparent;
+  border-right: none;
+}
+
+.dark .codemirror-editor .cm-activeLineGutter {
+  background: transparent;
+}
+
