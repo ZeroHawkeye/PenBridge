@@ -65,27 +65,17 @@ export default defineConfig({
     // 代码分割优化
     rollupOptions: {
       output: {
+        // 使用对象形式的 manualChunks，让 Rollup 自动处理依赖顺序
+        // 不再分离 react-vendor，让 React 打包到主入口确保最先执行
         manualChunks(id) {
-          // React 核心库
+          // 使用函数形式，但不再分离 React，确保它在主包中最先加载
+          // React 和 react-dom 保留在主包中，不做分离
           if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
-            return "react-vendor";
+            return; // 不分离，让 React 留在主包
           }
-          // antd 核心组件 - 按使用频率拆分
-          if (id.includes("node_modules/antd/")) {
-            // message/notification 等常用组件
-            if (id.includes("/message") || id.includes("/notification") || id.includes("/_util")) {
-              return "antd-core";
-            }
-            // Select/DatePicker 等表单组件（发布对话框使用）
-            if (id.includes("/select") || id.includes("/date-picker") || id.includes("/time-picker")) {
-              return "antd-form";
-            }
-            // Drawer/Dropdown/Tooltip 等 UI 组件
-            return "antd-ui";
-          }
-          // @ant-design/icons
-          if (id.includes("@ant-design/icons")) {
-            return "antd-icons";
+          // antd 和相关依赖
+          if (id.includes("node_modules/antd/") || id.includes("@ant-design/")) {
+            return "antd-vendor";
           }
           // 路由相关库
           if (id.includes("@tanstack/react-router")) {

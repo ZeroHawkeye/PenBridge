@@ -13,24 +13,23 @@ FROM oven/bun:1 AS web-builder
 # 接收版本号构建参数
 ARG VERSION=1.0.0
 
-WORKDIR /app
+WORKDIR /app/packages/web
 
 # 复制前端 package.json 和 lock 文件
-COPY packages/web/package.json packages/web/bun.lock* ./packages/web/
-
-# 更新 package.json 中的版本号（用于 Vite 构建时注入）
-WORKDIR /app/packages/web
-RUN sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json
+COPY packages/web/package.json packages/web/bun.lock* ./
 
 # 安装前端依赖
 RUN bun install
 
-# 复制前端源代码
-WORKDIR /app
-COPY packages/web ./packages/web
+# 调试：检查 antd 是否安装
+RUN ls -la node_modules/antd || echo "antd not found in node_modules"
 
-# 再次更新版本号（因为 COPY 会覆盖之前的修改）
-WORKDIR /app/packages/web
+# 复制前端源代码（排除 node_modules，不要再次复制 package.json）
+COPY packages/web/public ./public
+COPY packages/web/src ./src
+COPY packages/web/components.json packages/web/tsconfig.json packages/web/index.html packages/web/vite.config.ts ./
+
+# 更新 package.json 中的版本号（用于 Vite 构建时注入）
 RUN sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json
 
 # 构建前端
@@ -39,16 +38,15 @@ RUN bun run build
 # ===== 构建阶段 - 后端 =====
 FROM oven/bun:1 AS server-builder
 
-WORKDIR /app
+WORKDIR /app/packages/server
 
 # 复制后端 package.json 和 lock 文件
-COPY packages/server/package.json packages/server/bun.lock* ./packages/server/
+COPY packages/server/package.json packages/server/bun.lock* ./
 
 # 复制 shared 包（后端依赖）
-COPY packages/shared ./packages/shared
+COPY packages/shared /app/packages/shared
 
 # 安装后端依赖
-WORKDIR /app/packages/server
 RUN bun install
 
 # 复制后端源代码

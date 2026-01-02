@@ -1,22 +1,24 @@
-# 生产部署 docker-compose
-# 使用 GitHub Container Registry 的预构建镜像
+# PenBridge 多平台文章管理与发布工具 - Docker Compose 配置
+# 用于本地开发和测试
 #
 # 使用方法：
-#   docker compose -f docker-compose.prod.yml up -d
-#
-# 指定版本：
-#   VERSION=1.0.0 docker compose -f docker-compose.prod.yml up -d
-#
-# 使用最新版本：
-#   docker compose -f docker-compose.prod.yml up -d (默认使用 latest)
+#   构建并启动：docker-compose up -d --build
+#   查看日志：docker-compose logs -f
+#   停止服务：docker-compose down
+#   重新构建：docker-compose build --no-cache
 
 services:
   server:
-    image: ghcr.io/zerohawkeye/penbridge:latest
+    build:
+      # context 必须是项目根目录，因为 Dockerfile 需要访问 packages/web 和 packages/shared
+      context: .
+      dockerfile: packages/server/Dockerfile
+    image: pen-bridge:dev
     container_name: pen-bridge
     ports:
       - "3000:3000"
     volumes:
+      # 持久化数据目录（数据库和上传文件）
       - server-data:/app/data
     environment:
       - NODE_ENV=production
@@ -30,7 +32,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/health",
+          "http://localhost:3000/",
         ]
       interval: 30s
       timeout: 10s
