@@ -14,36 +14,40 @@ import {
   Loader2,
   ThumbsUp,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-// PenBridge Logo 组件
-function PenBridgeLogo({ className }: { className?: string }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      viewBox="0 0 200 200" 
-      className={className}
-      fill="currentColor"
-    >
-      <path 
-        d="M72 150 
-           L72 50 
-           L108 50 
-           Q140 50, 140 82
-           Q140 114, 108 114
-           L92 114 
-           L92 150 
-           L72 150 Z
-           M92 70 
-           L92 94 
-           L106 94 
-           Q120 94, 120 82
-           Q120 70, 106 70
-           L92 70 Z" 
-        fillRule="evenodd"
-      />
-    </svg>
-  );
+// 图片预加载 hook
+function useImagePreloader(imageSources: string[]) {
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (loadedRef.current) return;
+    
+    let loadedCount = 0;
+    const totalImages = imageSources.length;
+
+    imageSources.forEach((src) => {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          loadedRef.current = true;
+          setImagesLoaded(true);
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          loadedRef.current = true;
+          setImagesLoaded(true);
+        }
+      };
+    });
+  }, [imageSources]);
+
+  return imagesLoaded;
 }
 
 // 动画变体
@@ -60,6 +64,121 @@ const stagger = {
     },
   },
 };
+
+// 截图数据
+const screenshots = {
+  dashboard: {
+    src: "/screenshot-dashboard.png",
+    title: "仪表盘",
+    description: "直观的数据统计与快捷操作",
+  },
+  editor: {
+    src: "/screenshot-editor.png", 
+    title: "编辑器",
+    description: "沉浸式 Markdown 编辑体验",
+  },
+  ai: {
+    src: "/screenshot-ai-agent.png",
+    title: "AI 助手",
+    description: "智能 AI 助手，帮你优化文章、生成摘要、翻译内容",
+  },
+};
+
+// 预加载图片源列表
+const screenshotSources = Object.values(screenshots).map(s => s.src);
+
+// 应用截图展示组件
+function AppScreenshots() {
+  const [activeTab, setActiveTab] = useState<"dashboard" | "editor" | "ai">("dashboard");
+  const imagesLoaded = useImagePreloader(screenshotSources);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 40 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.6 }}
+      className="mt-16 relative"
+    >
+      {/* 截图切换标签 */}
+      <div className="flex justify-center gap-2 mb-6">
+        {(Object.keys(screenshots) as Array<keyof typeof screenshots>).map((key) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === key
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted/50 text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            {screenshots[key].title}
+          </button>
+        ))}
+      </div>
+
+      {/* 截图展示区域 */}
+      <div className="relative mx-auto max-w-5xl">
+        {/* 浏览器窗口装饰 */}
+        <div className="rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-card">
+          {/* 窗口标题栏 */}
+          <div className="h-10 bg-muted/80 border-b border-border/50 flex items-center px-4 gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-400" />
+              <div className="w-3 h-3 rounded-full bg-yellow-400" />
+              <div className="w-3 h-3 rounded-full bg-green-400" />
+            </div>
+            <div className="flex-1 flex justify-center">
+              <div className="px-4 py-1 bg-background/50 rounded-md text-xs text-muted-foreground">
+                PenBridge - {screenshots[activeTab].title}
+              </div>
+            </div>
+          </div>
+          
+          {/* 截图内容 - 使用固定宽高比容器避免抖动 */}
+          <div className="relative" style={{ aspectRatio: "16/10" }}>
+            {/* 加载占位符 */}
+            {!imagesLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            )}
+            
+            {/* 预渲染所有图片，通过透明度切换显示 */}
+            {(Object.keys(screenshots) as Array<keyof typeof screenshots>).map((key) => (
+              <motion.img
+                key={key}
+                src={screenshots[key].src}
+                alt={screenshots[key].title}
+                className="absolute inset-0 w-full h-full object-cover object-top"
+                initial={false}
+                animate={{ 
+                  opacity: activeTab === key && imagesLoaded ? 1 : 0,
+                  scale: activeTab === key ? 1 : 0.98
+                }}
+                transition={{ duration: 0.3 }}
+                style={{ pointerEvents: activeTab === key ? "auto" : "none" }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* 描述文字 */}
+        <motion.p 
+          key={activeTab + "-desc"}
+          className="text-center mt-4 text-muted-foreground"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          {screenshots[activeTab].description}
+        </motion.p>
+        
+        {/* 装饰阴影 */}
+        <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 blur-3xl -z-10" />
+      </div>
+    </motion.div>
+  );
+}
 
 function HeroSection() {
   return (
@@ -146,27 +265,8 @@ function HeroSection() {
           </motion.div>
         </motion.div>
 
-        {/* 应用截图预览 */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-          className="mt-16 relative"
-        >
-          <div className="relative mx-auto max-w-5xl rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-card">
-            <div className="aspect-[16/10] bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
-              <div className="text-center p-8">
-                <PenBridgeLogo className="w-16 h-16 text-primary mx-auto mb-4" />
-                <p className="text-muted-foreground">应用界面预览</p>
-                <p className="text-sm text-muted-foreground/70 mt-2">
-                  沉浸式 Markdown 编辑体验
-                </p>
-              </div>
-            </div>
-          </div>
-          {/* 装饰阴影 */}
-          <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 blur-3xl -z-10" />
-        </motion.div>
+{/* 应用截图预览 */}
+        <AppScreenshots />
       </div>
     </section>
   );
