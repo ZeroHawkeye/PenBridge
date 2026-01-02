@@ -201,6 +201,68 @@ export interface ExportedAdminUser {
   updatedAt: string;
 }
 
+// ==================== AI 配置相关类型 ====================
+
+/**
+ * AI SDK 类型
+ * - openai: 使用 @ai-sdk/openai，适用于 OpenAI 官方模型（原生支持 reasoning）
+ * - openai-compatible: 使用 @ai-sdk/openai-compatible，适用于兼容 OpenAI API 的第三方服务
+ */
+export type AISDKType = "openai" | "openai-compatible";
+
+/**
+ * 模型能力配置
+ */
+export interface ModelCapabilities {
+  // 是否支持推理/深度思考（如 o1、DeepSeek-R1 等）
+  reasoning: boolean;
+  // 是否支持流式输出
+  streaming: boolean;
+  // 是否支持工具调用/函数调用
+  functionCalling: boolean;
+  // 是否支持视觉理解（多模态）
+  vision: boolean;
+}
+
+/**
+ * AI Loop 配置（Agent 式多步任务）
+ */
+export interface AILoopConfig {
+  // 最大循环次数（防止死循环）
+  maxLoops: number;
+  // 是否不限制循环次数
+  unlimited: boolean;
+}
+
+/**
+ * 模型参数配置
+ */
+export interface ModelParameters {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+}
+
+/**
+ * 默认模型能力配置
+ */
+export const defaultCapabilities: ModelCapabilities = {
+  reasoning: false,
+  streaming: true,
+  functionCalling: true,
+  vision: false,
+};
+
+/**
+ * 默认 AI Loop 配置
+ */
+export const defaultAILoopConfig: AILoopConfig = {
+  maxLoops: 20,
+  unlimited: false,
+};
+
 /**
  * 导出的 AI 供应商配置
  */
@@ -212,7 +274,7 @@ export interface ExportedAIProvider {
   apiKey?: string; // 敏感数据，可选导出
   enabled: boolean;
   order: number;
-  apiType: "openai" | "zhipu";
+  sdkType: AISDKType;
   createdAt: string;
   updatedAt: string;
 }
@@ -230,18 +292,9 @@ export interface ExportedAIModel {
   enabled: boolean;
   order: number;
   contextLength?: number;
-  parameters?: Record<string, unknown>;
-  capabilities?: {
-    thinking?: {
-      supported: boolean;
-      apiFormat?: "standard" | "openai";
-      reasoningSummary?: "auto" | "detailed" | "concise" | "disabled";
-    };
-    streaming?: { supported: boolean; enabled: boolean };
-    functionCalling?: { supported: boolean };
-    vision?: { supported: boolean };
-    aiLoop?: { maxLoopCount: number; unlimitedLoop?: boolean };
-  };
+  parameters?: ModelParameters;
+  capabilities?: ModelCapabilities;
+  aiLoopConfig?: AILoopConfig;
   createdAt: string;
   updatedAt: string;
 }

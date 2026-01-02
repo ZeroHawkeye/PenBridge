@@ -17,14 +17,17 @@
     "@types/nodemailer": "^7.0.4"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.2",
+    "@ai-sdk/openai-compatible": "^2.0.2",
     "@hono/trpc-server": "0.4.1",
     "@trpc/server": "10.45.0",
+    "ai": "^6.0.5",
     "bcryptjs": "^3.0.3",
     "hono": "^4.11.3",
     "jszip": "^3.10.1",
     "nodemailer": "^7.0.12",
     "sql.js": "^1.13.0",
     "typeorm": "^0.3.28",
-    "zod": "3.24.0"
+    "zod": "^4.0.0"
   }
 }

@@ -340,8 +340,8 @@ export function TestDialog({ open, onOpenChange, model, getProviderName }: TestD
                     <Clock className="h-3 w-3" />
                     耗时: {testResult.duration}ms
                   </span>
-                  <span>输入 Tokens: {testResult.usage.promptTokens}</span>
-                  <span>输出 Tokens: {testResult.usage.completionTokens}</span>
+                  <span>输入 Tokens: {testResult.usage.inputTokens}</span>
+                  <span>输出 Tokens: {testResult.usage.outputTokens}</span>
                   <span>总计: {testResult.usage.totalTokens}</span>
                 </div>
               )}

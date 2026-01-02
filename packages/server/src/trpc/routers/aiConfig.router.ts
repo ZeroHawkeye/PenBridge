@@ -2,7 +2,30 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { t, protectedProcedure } from "../shared";
 import { AppDataSource } from "../../db";
-import { AIProvider, AIModel } from "../../entities/AIProvider";
+import { AIProvider, AIModel, defaultCapabilities, defaultAILoopConfig } from "../../entities/AIProvider";
+
+// 模型能力 schema
+const capabilitiesSchema = z.object({
+  reasoning: z.boolean().default(false),
+  streaming: z.boolean().default(true),
+  functionCalling: z.boolean().default(true),
+  vision: z.boolean().default(false),
+});
+
+// AI Loop 配置 schema
+const aiLoopConfigSchema = z.object({
+  maxLoops: z.number().min(1).max(100).default(20),
+  unlimited: z.boolean().default(false),
+});
+
+// 模型参数 schema
+const parametersSchema = z.object({
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().min(1).optional(),
+  topP: z.number().min(0).max(1).optional(),
+  frequencyPenalty: z.number().min(-2).max(2).optional(),
+  presencePenalty: z.number().min(-2).max(2).optional(),
+});
 
 // AI 配置相关路由
 export const aiConfigRouter = t.router({
@@ -28,7 +51,7 @@ export const aiConfigRouter = t.router({
         name: z.string().min(1, "请输入供应商名称"),
         baseUrl: z.string().url("请输入有效的 URL"),
         apiKey: z.string().min(1, "请输入 API Key"),
-        apiType: z.enum(["openai", "zhipu"]).default("openai"),
+        sdkType: z.enum(["openai", "openai-compatible"]).default("openai-compatible"),
       })
     )
     .mutation(async ({ input }) => {
@@ -65,7 +88,7 @@ export const aiConfigRouter = t.router({
         baseUrl: z.string().url().optional(),
         apiKey: z.string().optional(),
         enabled: z.boolean().optional(),
-        apiType: z.enum(["openai", "zhipu"]).optional(),
+        sdkType: z.enum(["openai", "openai-compatible"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -132,42 +155,10 @@ export const aiConfigRouter = t.router({
         modelId: z.string().min(1, "请输入模型标识"),
         displayName: z.string().min(1, "请输入显示名称"),
         isDefault: z.boolean().optional(),
-        // 上下文最大长度（tokens）- 允许 null 或 undefined，转换为 undefined
         contextLength: z.number().min(1).nullish().transform(val => val ?? undefined),
-        parameters: z.object({
-          temperature: z.number().min(0).max(2).optional(),
-          maxTokens: z.number().min(1).optional(),
-          topP: z.number().min(0).max(1).optional(),
-          frequencyPenalty: z.number().min(-2).max(2).optional(),
-          presencePenalty: z.number().min(-2).max(2).optional(),
-        }).optional(),
-        // 模型能力配置
-        capabilities: z.object({
-          // 深度思考/推理模式
-          thinking: z.object({
-            supported: z.boolean(),
-            apiFormat: z.enum(["standard", "openai"]).optional(),
-            reasoningSummary: z.enum(["auto", "detailed", "concise", "disabled"]).optional(),
-          }).optional(),
-          // 流式输出
-          streaming: z.object({
-            supported: z.boolean(),
-            enabled: z.boolean(),
-          }).optional(),
-          // 函数调用/工具使用
-          functionCalling: z.object({
-            supported: z.boolean(),
-          }).optional(),
-          // 视觉理解（多模态）
-          vision: z.object({
-            supported: z.boolean(),
-          }).optional(),
-          // AI Loop 配置
-          aiLoop: z.object({
-            maxLoopCount: z.number().min(1).max(100).nullish().transform(val => val ?? 20),
-            unlimitedLoop: z.boolean().optional(),
-          }).optional(),
-        }).optional(),
+        parameters: parametersSchema.optional(),
+        capabilities: capabilitiesSchema.optional(),
+        aiLoopConfig: aiLoopConfigSchema.optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -195,6 +186,8 @@ export const aiConfigRouter = t.router({
         ...input,
         userId: 1,
         order: (maxOrderResult?.maxOrder ?? -1) + 1,
+        capabilities: input.capabilities || defaultCapabilities,
+        aiLoopConfig: input.aiLoopConfig || defaultAILoopConfig,
       });
 
       await modelRepo.save(model);
@@ -210,42 +203,10 @@ export const aiConfigRouter = t.router({
         displayName: z.string().min(1).optional(),
         isDefault: z.boolean().optional(),
         enabled: z.boolean().optional(),
-        // 上下文最大长度（tokens）- 允许 null 或 undefined，转换为 undefined
         contextLength: z.number().min(1).nullish().transform(val => val ?? undefined),
-        parameters: z.object({
-          temperature: z.number().min(0).max(2).optional(),
-          maxTokens: z.number().min(1).optional(),
-          topP: z.number().min(0).max(1).optional(),
-          frequencyPenalty: z.number().min(-2).max(2).optional(),
-          presencePenalty: z.number().min(-2).max(2).optional(),
-        }).optional(),
-        // 模型能力配置
-        capabilities: z.object({
-          // 深度思考/推理模式
-          thinking: z.object({
-            supported: z.boolean(),
-            apiFormat: z.enum(["standard", "openai"]).optional(),
-            reasoningSummary: z.enum(["auto", "detailed", "concise", "disabled"]).optional(),
-          }).optional(),
-          // 流式输出
-          streaming: z.object({
-            supported: z.boolean(),
-            enabled: z.boolean(),
-          }).optional(),
-          // 函数调用/工具使用
-          functionCalling: z.object({
-            supported: z.boolean(),
-          }).optional(),
-          // 视觉理解（多模态）
-          vision: z.object({
-            supported: z.boolean(),
-          }).optional(),
-          // AI Loop 配置
-          aiLoop: z.object({
-            maxLoopCount: z.number().min(1).max(100).nullish().transform(val => val ?? 20),
-            unlimitedLoop: z.boolean().optional(),
-          }).optional(),
-        }).optional(),
+        parameters: parametersSchema.optional(),
+        capabilities: capabilitiesSchema.optional(),
+        aiLoopConfig: aiLoopConfigSchema.optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -309,6 +270,7 @@ export const aiConfigRouter = t.router({
         id: provider.id,
         name: provider.name,
         baseUrl: provider.baseUrl,
+        sdkType: provider.sdkType,
       },
     };
   }),

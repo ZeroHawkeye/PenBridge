@@ -1,36 +1,36 @@
 // AI 配置相关类型定义
 
+// SDK 类型
+export type AISDKType = "openai" | "openai-compatible";
+
 // 供应商类型
 export interface Provider {
   id: number;
   name: string;
   baseUrl: string;
   apiKey: string;
-  apiType: "openai" | "zhipu";
+  sdkType: AISDKType;
   enabled: boolean;
 }
 
-// 模型能力配置
+// 模型能力配置（简化后的扁平结构）
 export interface ModelCapabilities {
-  thinking: {
-    supported: boolean;
-    apiFormat: "standard" | "openai";
-    reasoningSummary: "auto" | "detailed" | "concise" | "disabled";
-  };
-  streaming: {
-    supported: boolean;
-    enabled: boolean;
-  };
-  functionCalling: {
-    supported: boolean;
-  };
-  vision: {
-    supported: boolean;
-  };
-  aiLoop: {
-    maxLoopCount: number;
-    unlimitedLoop: boolean;
-  };
+  reasoning: boolean;
+  streaming: boolean;
+  functionCalling: boolean;
+  vision: boolean;
+}
+
+// AI 循环配置（从 capabilities 中分离出来）
+export interface AILoopConfig {
+  maxLoops: number;
+  unlimited: boolean;
+}
+
+// 模型参数
+export interface ModelParameters {
+  temperature: number;
+  maxTokens: number;
 }
 
 // 模型类型
@@ -42,11 +42,9 @@ export interface Model {
   isDefault: boolean;
   enabled: boolean;
   contextLength?: number;
-  parameters: {
-    temperature: number;
-    maxTokens: number;
-  };
+  parameters: ModelParameters;
   capabilities: ModelCapabilities;
+  aiLoopConfig: AILoopConfig;
 }
 
 // 供应商表单数据
@@ -54,7 +52,7 @@ export interface ProviderFormData {
   name: string;
   baseUrl: string;
   apiKey: string;
-  apiType: "openai" | "zhipu";
+  sdkType: AISDKType;
 }
 
 // 模型表单数据
@@ -63,11 +61,9 @@ export interface ModelFormData {
   displayName: string;
   isDefault: boolean;
   contextLength?: number;
-  parameters: {
-    temperature: number;
-    maxTokens: number;
-  };
+  parameters: ModelParameters;
   capabilities: ModelCapabilities;
+  aiLoopConfig: AILoopConfig;
 }
 
 // 测试结果
@@ -78,8 +74,8 @@ export interface TestResult {
   hasReasoning?: boolean;
   response?: string | null;
   usage?: {
-    promptTokens: number;
-    completionTokens: number;
+    inputTokens: number;
+    outputTokens: number;
     totalTokens: number;
   } | null;
   duration?: number;
@@ -87,23 +83,20 @@ export interface TestResult {
 
 // 默认能力配置
 export const defaultCapabilities: ModelCapabilities = {
-  thinking: {
-    supported: false,
-    apiFormat: "standard",
-    reasoningSummary: "auto",
-  },
-  streaming: {
-    supported: true,
-    enabled: true,
-  },
-  functionCalling: {
-    supported: true,
-  },
-  vision: {
-    supported: false,
-  },
-  aiLoop: {
-    maxLoopCount: 20,
-    unlimitedLoop: false,
-  },
+  reasoning: false,
+  streaming: true,
+  functionCalling: true,
+  vision: false,
+};
+
+// 默认 AI 循环配置
+export const defaultAILoopConfig: AILoopConfig = {
+  maxLoops: 20,
+  unlimited: false,
+};
+
+// 默认模型参数
+export const defaultParameters: ModelParameters = {
+  temperature: 0.7,
+  maxTokens: 4096,
 };

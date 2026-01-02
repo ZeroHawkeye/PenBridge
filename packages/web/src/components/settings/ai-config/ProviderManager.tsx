@@ -63,7 +63,7 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
     name: "",
     baseUrl: "",
     apiKey: "",
-    apiType: "openai",
+    sdkType: "openai-compatible",
   });
 
   // 显示 API Key 状态
@@ -109,7 +109,7 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
   });
 
   const resetProviderForm = () => {
-    setProviderForm({ name: "", baseUrl: "", apiKey: "", apiType: "openai" });
+    setProviderForm({ name: "", baseUrl: "", apiKey: "", sdkType: "openai-compatible" });
     setShowApiKey(false);
   };
 
@@ -119,7 +119,7 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
       name: provider.name,
       baseUrl: provider.baseUrl,
       apiKey: provider.apiKey,
-      apiType: provider.apiType || "openai",
+      sdkType: provider.sdkType || "openai-compatible",
     });
     setShowProviderDialog(true);
   };
@@ -231,23 +231,23 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="provider-apiType">API 类型</Label>
+                  <Label htmlFor="provider-sdkType">SDK 类型</Label>
                   <Select
-                    value={providerForm.apiType}
-                    onValueChange={(value: "openai" | "zhipu") => setProviderForm({ ...providerForm, apiType: value })}
+                    value={providerForm.sdkType}
+                    onValueChange={(value: "openai" | "openai-compatible") => setProviderForm({ ...providerForm, sdkType: value })}
                   >
-                    <SelectTrigger id="provider-apiType">
-                      <SelectValue placeholder="选择 API 类型" />
+                    <SelectTrigger id="provider-sdkType">
+                      <SelectValue placeholder="选择 SDK 类型" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="openai">OpenAI 兼容</SelectItem>
-                      <SelectItem value="zhipu">智谱 AI</SelectItem>
+                      <SelectItem value="openai">OpenAI 官方</SelectItem>
+                      <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {providerForm.apiType === "zhipu" 
-                      ? "智谱 AI 使用特殊的 tool_stream 格式进行流式工具调用"
-                      : "标准 OpenAI 格式，适用于 OpenAI、Claude、通义千问等大多数服务商"}
+                    {providerForm.sdkType === "openai" 
+                      ? "仅用于 OpenAI 官方 API (api.openai.com)，原生支持 o1/o3/gpt-5 推理"
+                      : "适用于智谱、DeepSeek、通义千问、Moonshot 等兼容 OpenAI 格式的服务商"}
                   </p>
                 </div>
               </div>
@@ -287,7 +287,7 @@ export function ProviderManager({ providers }: ProviderManagerProps) {
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs">
-                      {provider.apiType === "zhipu" ? "智谱" : "OpenAI"}
+                      {provider.sdkType === "openai" ? "OpenAI" : "兼容"}
                     </Badge>
                   </TableCell>
                   <TableCell>

@@ -96,7 +96,7 @@ export function AIChatPanel({
   });
   
   // 判断当前模型是否支持工具调用
-  const supportsToolCalling = selectedModel?.capabilities?.functionCalling?.supported ?? false;
+  const supportsToolCalling = selectedModel?.capabilities?.functionCalling ?? false;
   
   // 计算当前会话的 token 总使用量
   // 优先从 messages 中累计（实时），如果为 0 则使用 session.totalTokens（历史数据）
@@ -465,7 +465,7 @@ export function AIChatPanel({
           <div className="flex items-center justify-between px-3 py-2">
             {/* 左侧：深度思考开关 */}
             <div className="flex items-center gap-2">
-              {selectedModel?.capabilities?.thinking?.supported && (
+              {selectedModel?.capabilities?.reasoning && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -489,9 +489,8 @@ export function AIChatPanel({
                   </Tooltip>
                 </TooltipProvider>
               )}
-              {/* OpenAI 格式时显示推理努力程度 */}
-              {selectedModel?.capabilities?.thinking?.supported && 
-               selectedModel?.capabilities?.thinking?.apiFormat === "openai" && 
+              {/* 推理努力程度选择器 - 仅在启用深度思考时显示 */}
+              {selectedModel?.capabilities?.reasoning && 
                thinkingSettings.enabled && (
                 <AntdSelect
                   value={thinkingSettings.reasoningEffort}

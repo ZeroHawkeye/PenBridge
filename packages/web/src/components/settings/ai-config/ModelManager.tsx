@@ -46,7 +46,7 @@ import {
 import { trpc } from "@/utils/trpc";
 import { message } from "antd";
 import type { Provider, Model, ModelFormData } from "./types";
-import { defaultCapabilities } from "./types";
+import { defaultCapabilities, defaultAILoopConfig, defaultParameters } from "./types";
 
 interface ModelManagerProps {
   providers: Provider[] | undefined;
@@ -66,11 +66,9 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
     displayName: "",
     isDefault: false,
     contextLength: undefined,
-    parameters: {
-      temperature: 0.7,
-      maxTokens: 4096,
-    },
+    parameters: defaultParameters,
     capabilities: defaultCapabilities,
+    aiLoopConfig: defaultAILoopConfig,
   });
 
   // 创建模型
@@ -117,8 +115,9 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
       displayName: "",
       isDefault: false,
       contextLength: undefined,
-      parameters: { temperature: 0.7, maxTokens: 4096 },
+      parameters: defaultParameters,
       capabilities: defaultCapabilities,
+      aiLoopConfig: defaultAILoopConfig,
     });
     setSelectedProviderId(null);
   };
@@ -127,29 +126,33 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
     setEditingModel(model);
     setSelectedProviderId(model.providerId);
     
-    // 深度合并 capabilities，确保所有字段都有默认值
-    const modelCapabilities = model.capabilities || {};
+    // 从数据库读取的 capabilities 可能是旧格式（嵌套对象）或新格式（扁平布尔值）
+    // 需要兼容转换
+    const rawCapabilities = model.capabilities as any || {};
     const mergedCapabilities = {
-      thinking: {
-        ...defaultCapabilities.thinking,
-        ...(modelCapabilities.thinking || {}),
-      },
-      streaming: {
-        ...defaultCapabilities.streaming,
-        ...(modelCapabilities.streaming || {}),
-      },
-      functionCalling: {
-        ...defaultCapabilities.functionCalling,
-        ...(modelCapabilities.functionCalling || {}),
-      },
-      vision: {
-        ...defaultCapabilities.vision,
-        ...(modelCapabilities.vision || {}),
-      },
-      aiLoop: {
-        ...defaultCapabilities.aiLoop,
-        ...(modelCapabilities.aiLoop || {}),
-      },
+      // 兼容旧格式：thinking.supported -> reasoning
+      reasoning: typeof rawCapabilities.reasoning === "boolean" 
+        ? rawCapabilities.reasoning 
+        : rawCapabilities.thinking?.supported ?? defaultCapabilities.reasoning,
+      // 兼容旧格式：streaming.supported && streaming.enabled -> streaming
+      streaming: typeof rawCapabilities.streaming === "boolean"
+        ? rawCapabilities.streaming
+        : (rawCapabilities.streaming?.supported && rawCapabilities.streaming?.enabled) ?? defaultCapabilities.streaming,
+      // 兼容旧格式：functionCalling.supported -> functionCalling
+      functionCalling: typeof rawCapabilities.functionCalling === "boolean"
+        ? rawCapabilities.functionCalling
+        : rawCapabilities.functionCalling?.supported ?? defaultCapabilities.functionCalling,
+      // 兼容旧格式：vision.supported -> vision
+      vision: typeof rawCapabilities.vision === "boolean"
+        ? rawCapabilities.vision
+        : rawCapabilities.vision?.supported ?? defaultCapabilities.vision,
+    };
+    
+    // 兼容旧格式的 aiLoop 配置
+    const rawAILoopConfig = (model.aiLoopConfig || (rawCapabilities.aiLoop as any)) as any || {};
+    const mergedAILoopConfig = {
+      maxLoops: rawAILoopConfig.maxLoops ?? rawAILoopConfig.maxLoopCount ?? defaultAILoopConfig.maxLoops,
+      unlimited: rawAILoopConfig.unlimited ?? rawAILoopConfig.unlimitedLoop ?? defaultAILoopConfig.unlimited,
     };
     
     setModelForm({
@@ -157,8 +160,9 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
       displayName: model.displayName,
       isDefault: model.isDefault,
       contextLength: model.contextLength,
-      parameters: model.parameters || { temperature: 0.7, maxTokens: 4096 },
+      parameters: model.parameters || defaultParameters,
       capabilities: mergedCapabilities,
+      aiLoopConfig: mergedAILoopConfig,
     });
     setShowModelDialog(true);
   };
@@ -177,8 +181,8 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
       return;
     }
     // 验证工具最大调用次数
-    const maxLoopCount = modelForm.capabilities.aiLoop.maxLoopCount;
-    if (maxLoopCount < 1 || maxLoopCount > 100) {
+    const maxLoops = modelForm.aiLoopConfig.maxLoops;
+    if (maxLoops < 1 || maxLoops > 100) {
       message.error("工具最大调用次数必须在 1-100 之间");
       return;
     }
@@ -349,106 +353,31 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
                 <div className="space-y-3 pt-2 border-t">
                   <Label>模型能力</Label>
                   
-                  {/* 深度思考配置 */}
-                  <div className="space-y-2 p-3 rounded-md bg-muted/50">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="thinking-supported" className="text-sm font-normal">
-                        支持深度思考
+                  {/* 能力开关网格 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                      <Label htmlFor="reasoning-supported" className="text-sm font-normal">
+                        深度思考
                       </Label>
                       <Switch
-                        id="thinking-supported"
-                        checked={modelForm.capabilities.thinking.supported}
+                        id="reasoning-supported"
+                        checked={modelForm.capabilities.reasoning}
                         onCheckedChange={(checked) => setModelForm({
                           ...modelForm,
-                          capabilities: {
-                            ...modelForm.capabilities,
-                            thinking: {
-                              ...modelForm.capabilities.thinking,
-                              supported: checked,
-                            },
-                          },
+                          capabilities: { ...modelForm.capabilities, reasoning: checked },
                         })}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      是否启用深度思考可在 AI 助手面板中动态切换
-                    </p>
-                    
-                    {modelForm.capabilities.thinking.supported && (
-                      <>
-                        <div className="space-y-1">
-                          <Label htmlFor="thinking-api-format" className="text-xs text-muted-foreground">
-                            API 格式
-                          </Label>
-                          <Select
-                            value={modelForm.capabilities.thinking.apiFormat}
-                            onValueChange={(value: "standard" | "openai") => setModelForm({
-                              ...modelForm,
-                              capabilities: {
-                                ...modelForm.capabilities,
-                                thinking: { ...modelForm.capabilities.thinking, apiFormat: value },
-                              },
-                            })}
-                          >
-                            <SelectTrigger id="thinking-api-format">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="standard">标准格式 (智谱/DeepSeek 等)</SelectItem>
-                              <SelectItem value="openai">OpenAI 格式 (o1/o3/gpt-5)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {modelForm.capabilities.thinking.apiFormat === "openai" && (
-                          <div className="space-y-1">
-                            <Label htmlFor="reasoning-summary" className="text-xs text-muted-foreground">
-                              推理摘要
-                            </Label>
-                            <Select
-                              value={modelForm.capabilities.thinking.reasoningSummary}
-                              onValueChange={(value: "auto" | "detailed" | "concise" | "disabled") => setModelForm({
-                                ...modelForm,
-                                capabilities: {
-                                  ...modelForm.capabilities,
-                                  thinking: { ...modelForm.capabilities.thinking, reasoningSummary: value },
-                                },
-                              })}
-                            >
-                              <SelectTrigger id="reasoning-summary">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="auto">自动</SelectItem>
-                                <SelectItem value="detailed">详细</SelectItem>
-                                <SelectItem value="concise">简洁</SelectItem>
-                                <SelectItem value="disabled">禁用</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              OpenAI 不返回原始思维链，仅提供推理摘要。推理努力程度可在 AI 助手面板中选择。
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* 其他能力 */}
-                  <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
                       <Label htmlFor="streaming-supported" className="text-sm font-normal">
                         流式输出
                       </Label>
                       <Switch
                         id="streaming-supported"
-                        checked={modelForm.capabilities.streaming.supported && modelForm.capabilities.streaming.enabled}
+                        checked={modelForm.capabilities.streaming}
                         onCheckedChange={(checked) => setModelForm({
                           ...modelForm,
-                          capabilities: {
-                            ...modelForm.capabilities,
-                            streaming: { supported: checked, enabled: checked },
-                          },
+                          capabilities: { ...modelForm.capabilities, streaming: checked },
                         })}
                       />
                     </div>
@@ -458,13 +387,10 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
                       </Label>
                       <Switch
                         id="function-calling-supported"
-                        checked={modelForm.capabilities.functionCalling.supported}
+                        checked={modelForm.capabilities.functionCalling}
                         onCheckedChange={(checked) => setModelForm({
                           ...modelForm,
-                          capabilities: {
-                            ...modelForm.capabilities,
-                            functionCalling: { supported: checked },
-                          },
+                          capabilities: { ...modelForm.capabilities, functionCalling: checked },
                         })}
                       />
                     </div>
@@ -474,17 +400,18 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
                       </Label>
                       <Switch
                         id="vision-supported"
-                        checked={modelForm.capabilities.vision.supported}
+                        checked={modelForm.capabilities.vision}
                         onCheckedChange={(checked) => setModelForm({
                           ...modelForm,
-                          capabilities: {
-                            ...modelForm.capabilities,
-                            vision: { supported: checked },
-                          },
+                          capabilities: { ...modelForm.capabilities, vision: checked },
                         })}
                       />
                     </div>
                   </div>
+                  
+                  <p className="text-xs text-muted-foreground">
+                    是否启用深度思考可在 AI 助手面板中动态切换
+                  </p>
 
                   {/* 自动多步推理配置 */}
                   <div className="space-y-2 p-3 rounded-md bg-muted/50">
@@ -502,20 +429,17 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
                         type="number"
                         min="1"
                         max="100"
-                        value={modelForm.capabilities.aiLoop.maxLoopCount}
+                        value={modelForm.aiLoopConfig.maxLoops}
                         onChange={(e) => {
                           const value = parseInt(e.target.value);
                           const clampedValue = isNaN(value) ? 20 : Math.min(100, Math.max(1, value));
                           setModelForm({
                             ...modelForm,
-                            capabilities: {
-                              ...modelForm.capabilities,
-                              aiLoop: { ...modelForm.capabilities.aiLoop, maxLoopCount: clampedValue },
-                            },
+                            aiLoopConfig: { ...modelForm.aiLoopConfig, maxLoops: clampedValue },
                           });
                         }}
                         className="w-24"
-                        disabled={modelForm.capabilities.aiLoop.unlimitedLoop}
+                        disabled={modelForm.aiLoopConfig.unlimited}
                       />
                       <span className="text-xs text-muted-foreground">
                         (1-100)
@@ -534,17 +458,14 @@ export function ModelManager({ providers, models, onTestModel }: ModelManagerPro
                       </div>
                       <Switch
                         id="unlimited-loop"
-                        checked={modelForm.capabilities.aiLoop.unlimitedLoop}
+                        checked={modelForm.aiLoopConfig.unlimited}
                         onCheckedChange={(checked) => setModelForm({
                           ...modelForm,
-                          capabilities: {
-                            ...modelForm.capabilities,
-                            aiLoop: { ...modelForm.capabilities.aiLoop, unlimitedLoop: checked },
-                          },
+                          aiLoopConfig: { ...modelForm.aiLoopConfig, unlimited: checked },
                         })}
                       />
                     </div>
-                    {modelForm.capabilities.aiLoop.unlimitedLoop && (
+                    {modelForm.aiLoopConfig.unlimited && (
                       <div className="p-2 rounded-md bg-destructive/10 border border-destructive/20">
                         <p className="text-xs text-destructive font-medium">
                           警告：启用此选项存在风险

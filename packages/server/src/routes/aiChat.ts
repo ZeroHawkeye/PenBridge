@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { AppDataSource } from "../db";
-import { AIProvider, AIModel } from "../entities/AIProvider";
+import { AIProvider, AIModel, defaultCapabilities } from "../entities/AIProvider";
 import { validateSession } from "../services/adminAuth";
 
 export const aiChatRouter = new Hono();
@@ -82,15 +82,13 @@ aiChatRouter.post("/", async (c) => {
     });
     logStep("模型配置查询完成");
 
-    console.log(`${logPrefix} 供应商: ${provider.name}, API地址: ${provider.baseUrl}`);
+    console.log(`${logPrefix} 供应商: ${provider.name}, API地址: ${provider.baseUrl}, SDK类型: ${provider.sdkType}`);
     console.log(`${logPrefix} 模型能力配置: ${modelConfig?.capabilities ? JSON.stringify(modelConfig.capabilities) : "无"}`);
 
     const apiUrl = `${provider.baseUrl}/chat/completions`;
 
     // 获取模型能力配置
-    const capabilities = modelConfig?.capabilities;
-    const thinkingConfig = capabilities?.thinking;
-    const streamingConfig = capabilities?.streaming;
+    const capabilities = modelConfig?.capabilities || defaultCapabilities;
 
     // 构建基础请求体
     const requestBody: Record<string, any> = {
@@ -98,45 +96,15 @@ aiChatRouter.post("/", async (c) => {
       messages: [{ role: "user", content: message }],
       max_tokens: 1024,
       temperature: 0.7,
-      // 根据流式输出配置决定是否启用
-      stream: streamingConfig?.supported !== false && streamingConfig?.enabled !== false,
+      stream: capabilities.streaming !== false,
     };
 
-    // 根据模型的深度思考配置添加相应参数
-    // 测试对话中，如果模型支持深度思考，总是启用以便测试
-    if (thinkingConfig?.supported) {
-      const apiFormat = thinkingConfig.apiFormat || "standard";
-
-      console.log(`${logPrefix} 深度思考配置: apiFormat=${apiFormat}, supported=${thinkingConfig.supported}`);
-
-      if (apiFormat === "openai") {
-        // OpenAI 专用格式: 使用 reasoning.effort 参数
-        // 适用于 OpenAI o1/o3/gpt-5 等推理模型
-        // 测试对话默认使用 medium 努力程度
-        const reasoningParams: Record<string, any> = {
-          effort: "medium",
-        };
-
-        // 添加 summary 参数（如果配置了且不是 disabled）
-        // OpenAI 不返回原始思维链，但可以返回推理摘要
-        const summaryType = thinkingConfig.reasoningSummary;
-        if (summaryType && summaryType !== "disabled") {
-          reasoningParams.summary = summaryType;
-        }
-
-        requestBody.reasoning = reasoningParams;
-        console.log(`${logPrefix} OpenAI 推理模式: effort=${reasoningParams.effort}, summary=${summaryType || "未设置"}`);
-      } else {
-        // 标准格式: 使用 thinking.type 参数
-        // 适用于智谱 GLM、DeepSeek 等兼容 API
-        // 测试对话默认启用深度思考
-        requestBody.thinking = {
-          type: "enabled",
-        };
-        console.log(`${logPrefix} 标准深度思考: ${requestBody.thinking.type}`);
-      }
-    } else {
-      console.log(`${logPrefix} 深度思考: 未配置或不支持`);
+    // 如果支持推理且使用 OpenAI SDK，添加推理参数
+    if (capabilities.reasoning && provider.sdkType === "openai") {
+      requestBody.reasoning = {
+        effort: "medium",
+      };
+      console.log(`${logPrefix} OpenAI 推理模式: effort=medium`);
     }
 
     // 解析 URL 获取主机名
@@ -197,7 +165,7 @@ aiChatRouter.post("/", async (c) => {
           let completionTokens = 0;
           let chunkCount = 0;
           let firstChunkTime = 0;
-          let isReasoning = false; // 标记当前是否在思考阶段
+          let isReasoning = false;
 
           try {
             while (true) {
@@ -231,7 +199,6 @@ aiChatRouter.post("/", async (c) => {
                   const reasoningContent = delta.reasoning_content || "";
 
                   // 处理 OpenAI Responses API 格式（output 数组）
-                  // OpenAI 的推理模型返回格式: { output: [{ type: "reasoning", summary: [...] }, { type: "message", content: [...] }] }
                   if (data.output && Array.isArray(data.output)) {
                     for (const outputItem of data.output) {
                       // 处理推理摘要
@@ -244,7 +211,6 @@ aiChatRouter.post("/", async (c) => {
                           });
                         }
 
-                        // summary 是一个数组，包含 { type: "summary_text", text: "..." }
                         for (const summaryItem of outputItem.summary) {
                           if (summaryItem.type === "summary_text" && summaryItem.text) {
                             fullReasoning += summaryItem.text;
@@ -281,7 +247,6 @@ aiChatRouter.post("/", async (c) => {
 
                   // 处理思维链内容（深度思考模式 - 智谱/DeepSeek 格式）
                   if (reasoningContent) {
-                    // 首次收到思维链内容时，发送开始事件
                     if (!isReasoning) {
                       isReasoning = true;
                       await stream.writeSSE({
@@ -299,7 +264,6 @@ aiChatRouter.post("/", async (c) => {
 
                   // 处理正常内容（标准 OpenAI 兼容格式）
                   if (content) {
-                    // 如果之前在思考阶段，现在开始输出正文，发送结束事件
                     if (isReasoning) {
                       isReasoning = false;
                       await stream.writeSSE({
@@ -315,7 +279,7 @@ aiChatRouter.post("/", async (c) => {
                     });
                   }
 
-                  // 获取 usage 信息（某些 API 在流结束时返回）
+                  // 获取 usage 信息
                   if (data.usage) {
                     promptTokens = data.usage.prompt_tokens || 0;
                     completionTokens = data.usage.completion_tokens || 0;

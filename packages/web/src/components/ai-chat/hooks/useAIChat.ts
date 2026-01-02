@@ -14,6 +14,7 @@ import type {
   UseAIChatReturn,
 } from "../types";
 import { executeToolCalls } from "../tools/frontendTools";
+import { buildContinueMessageHistory } from "../tools/toolResultFormatter";
 import { useChatSession } from "./useChatSession";
 import { usePendingChanges } from "./usePendingChanges";
 import { DEFAULT_MAX_LOOP_COUNT, ARGS_UPDATE_THROTTLE } from "./constants";
@@ -37,6 +38,8 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   // Refs
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentMessageIdRef = useRef<string | null>(null);
+  // 用于打破循环依赖的 ref
+  const sendMessageToAPIRef = useRef<((messageHistory: Array<{ role: string; content: string }>, loopCount?: number) => Promise<void>) | null>(null);
   
   // 使用会话管理 Hook
   const sessionState = useChatSession({ articleId });
@@ -95,13 +98,33 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
     }
   }, []);
   
+  // 用于持有 pendingChangesState 的 ref（解决循环依赖）
+  const pendingChangesStateRef = useRef<ReturnType<typeof usePendingChanges> | null>(null);
+  
   // 恢复 AI Loop（前向声明，用于 usePendingChanges）
+  // 注意：使用 ref 来访问 sendMessageToAPI 和 pendingChangesState，避免闭包失效
   const resumeAILoop = useCallback(async (toolResults: Array<{ id: string; result: string }>) => {
+    const pendingChangesState = pendingChangesStateRef.current;
+    const sendMessageToAPI = sendMessageToAPIRef.current;
+    
+    if (!pendingChangesState) {
+      console.error('[resumeAILoop] pendingChangesState 未初始化');
+      return;
+    }
+    
     const pausedState = pendingChangesState.pausedStateRef.current;
     if (!pausedState || !selectedModel) {
+      console.log('[resumeAILoop] 无暂存状态或模型未选择');
       pendingChangesState.pausedStateRef.current = null;
       return;
     }
+    
+    if (!sendMessageToAPI) {
+      console.error('[resumeAILoop] sendMessageToAPI 未初始化');
+      return;
+    }
+    
+    console.log('[resumeAILoop] 开始恢复 AI Loop, loopCount:', pausedState.loopCount);
     
     // 更新暂存的工具调用结果
     const updatedToolCalls = pausedState.toolCalls.map(tc => {
@@ -115,85 +138,19 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       return tc;
     });
     
-    // 构建工具结果消息（使用纯文本格式，避免嵌套 JSON 导致的转义问题）
-    const toolResultMessages = updatedToolCalls.map(tc => {
-      if (tc.status === "failed") {
-        return {
-          role: "tool" as const,
-          content: `[错误] ${tc.error || "工具执行失败"}`,
-          tool_call_id: tc.id,
-        };
-      }
-      
-      // 解析 JSON 结果并转换为纯文本格式
-      let resultContent = "工具执行完成";
-      try {
-        const parsed = JSON.parse(tc.result || "{}");
-        
-        // 对于 read_article 工具，直接输出内容
-        if (tc.name === "read_article") {
-          const parts: string[] = [];
-          if (parsed.title !== undefined) {
-            parts.push(`标题: ${parsed.title}`);
-          }
-          if (parsed.totalLines !== undefined) {
-            parts.push(`总行数: ${parsed.totalLines}`);
-          }
-          if (parsed.startLine !== undefined && parsed.endLine !== undefined) {
-            parts.push(`当前范围: 第 ${parsed.startLine} 行 - 第 ${parsed.endLine} 行`);
-          }
-          if (parsed.hasMoreAfter) {
-            parts.push(`提示: 还有更多内容未显示，可使用 startLine 参数继续读取`);
-          }
-          if (parsed.content !== undefined) {
-            parts.push(`\n内容:\n${parsed.content}`);
-          }
-          resultContent = parts.join("\n");
-        } else {
-          // 其他工具：简单格式化输出
-          resultContent = Object.entries(parsed)
-            .map(([key, value]) => {
-              if (typeof value === "object") {
-                return `${key}: ${JSON.stringify(value)}`;
-              }
-              return `${key}: ${value}`;
-            })
-            .join("\n");
-        }
-      } catch {
-        resultContent = tc.result || "工具执行完成";
-      }
-      
-      return {
-        role: "tool" as const,
-        content: resultContent,
-        tool_call_id: tc.id,
-      };
-    });
-    
-    // 继续对话
-    const newHistory = [
-      ...pausedState.messageHistory,
-      {
-        role: "assistant",
-        content: pausedState.assistantContent,
-        tool_calls: pausedState.toolCalls.map(tc => ({
-          id: tc.id,
-          type: "function",
-          function: {
-            name: tc.name,
-            arguments: tc.arguments,
-          },
-        })),
-      },
-      ...toolResultMessages,
-    ];
+    // 使用 toolResultFormatter 构建工具结果消息（避免嵌套 JSON 导致的转义问题）
+    const newHistory = buildContinueMessageHistory(
+      pausedState.messageHistory,
+      pausedState.assistantContent,
+      updatedToolCalls
+    );
     
     // 清除暂存状态
     pendingChangesState.pausedStateRef.current = null;
     
     // 继续 AI Loop
     setIsLoading(true);
+    console.log('[resumeAILoop] 调用 sendMessageToAPI, newHistory 长度:', newHistory.length);
     await sendMessageToAPI(newHistory, pausedState.loopCount + 1);
   }, [selectedModel]);
   
@@ -204,20 +161,40 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
     resumeAILoop
   );
   
+  // 更新 ref（在 Hook 调用后立即更新）
+  pendingChangesStateRef.current = pendingChangesState;
+  
   // 发送消息并处理流式响应
   const sendMessageToAPI = useCallback(async (
     messageHistory: Array<{ role: string; content: string }>,
     loopCount: number = 0
   ): Promise<void> => {
-    console.log(`[AI Loop] sendMessageToAPI 开始, loopCount=${loopCount}`);
+    console.log(`[AI Loop] sendMessageToAPI 开始, loopCount=${loopCount}, 消息数量=${messageHistory.length}`);
+    
+    // 调试：打印消息历史
+    if (loopCount > 0) {
+      console.log('[AI Loop] 消息历史详情:');
+      messageHistory.forEach((msg, i) => {
+        const contentPreview = typeof msg.content === 'string' 
+          ? msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : '')
+          : JSON.stringify(msg.content).substring(0, 200);
+        console.log(`  [${i}] role=${msg.role}, content=${contentPreview}`);
+        if ((msg as any).tool_calls) {
+          console.log(`       tool_calls:`, (msg as any).tool_calls);
+        }
+        if ((msg as any).tool_call_id) {
+          console.log(`       tool_call_id:`, (msg as any).tool_call_id);
+        }
+      });
+    }
     
     if (!selectedModel) {
       setError("请先选择 AI 模型");
       return;
     }
     
-    const maxLoopCount = selectedModel.capabilities?.aiLoop?.maxLoopCount || DEFAULT_MAX_LOOP_COUNT;
-    const unlimitedLoop = selectedModel.capabilities?.aiLoop?.unlimitedLoop || false;
+    const maxLoopCount = selectedModel.aiLoopConfig?.maxLoops || DEFAULT_MAX_LOOP_COUNT;
+    const unlimitedLoop = selectedModel.aiLoopConfig?.unlimited || false;
     
     if (!unlimitedLoop && loopCount >= maxLoopCount) {
       setError(`已达到最大推理次数 (${maxLoopCount})，任务可能过于复杂`);
@@ -241,8 +218,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       
       const apiBaseUrl = getApiBaseUrl();
       
-      const thinkingSupported = selectedModel.capabilities?.thinking?.supported;
-      const thinkingApiFormat = selectedModel.capabilities?.thinking?.apiFormat;
+      const thinkingSupported = selectedModel.capabilities?.reasoning;
       
       const response = await fetch(`${apiBaseUrl}/api/ai/chat/stream`, {
         method: "POST",
@@ -262,9 +238,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
           } : undefined,
           ...(thinkingSupported && thinkingSettings.enabled ? {
             thinkingEnabled: true,
-            ...(thinkingApiFormat === "openai" ? {
-              reasoningEffort: thinkingSettings.reasoningEffort,
-            } : {}),
+            reasoningEffort: thinkingSettings.reasoningEffort,
           } : {}),
         }),
         signal: abortController.signal,
@@ -303,6 +277,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       
       let currentEventType = "";
       let lastArgsUpdateTime = 0;
+      let receivedNetworkError = false;
       
       while (true) {
         const { done, value } = await reader.read();
@@ -451,6 +426,11 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
                 
               case "error":
                 if (data.error) {
+                  // 检查是否是可重试的网络错误
+                  if (data.retryable) {
+                    receivedNetworkError = true;
+                    console.warn('[AI Chat] 收到可重试的错误:', data.error, data.rawReason);
+                  }
                   setMessages(prev => prev.map(m => 
                     m.id === tempMessageId 
                       ? { ...m, status: "failed", error: data.error }
@@ -510,6 +490,13 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       }
       
       setIsStreaming(false);
+      
+      // 如果收到网络错误且没有任何内容，提前返回（错误已在 error 事件中处理）
+      if (receivedNetworkError && assistantContent.length === 0 && toolCalls.length === 0) {
+        console.log('[AI Chat] 网络错误导致空响应，结束当前请求');
+        setIsLoading(false);
+        return;
+      }
       
       // 如果有工具调用，执行工具并继续对话
       if (toolCalls.length > 0) {
@@ -608,90 +595,13 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
           }
         }
         
-        // 构建工具结果消息
-        // 重要：使用纯文本格式而非嵌套 JSON，避免多次 HTTP 传输导致转义字符累积
-        // 
-        // 问题分析：
-        // 1. tc.result 已经是 JSON 字符串（在 executeToolCalls 中 stringify）
-        // 2. 发送到服务器时整个 messages 数组被 stringify（第 2 次）
-        // 3. 服务器转发给 AI API 时再次 stringify（第 3 次）
-        // 4. 每次 stringify 都会转义反斜杠，但解析只能还原一层
-        // 
-        // 解决方案：将 tool result 解析后转换为纯文本格式
-        const toolResultMessages = executedToolCalls.map(tc => {
-          if (tc.status === "failed") {
-            // 失败消息使用简单文本格式
-            return {
-              role: "tool" as const,
-              content: `[错误] ${tc.error || "工具执行失败"}`,
-              tool_call_id: tc.id,
-            };
-          }
-          
-          // 解析 JSON 结果并转换为纯文本格式
-          let resultContent = "工具执行完成";
-          try {
-            const parsed = JSON.parse(tc.result || "{}");
-            
-            // 对于 read_article 工具，直接输出内容（避免嵌套 JSON 导致的转义问题）
-            if (tc.name === "read_article") {
-              const parts: string[] = [];
-              if (parsed.title !== undefined) {
-                parts.push(`标题: ${parsed.title}`);
-              }
-              if (parsed.totalLines !== undefined) {
-                parts.push(`总行数: ${parsed.totalLines}`);
-              }
-              if (parsed.startLine !== undefined && parsed.endLine !== undefined) {
-                parts.push(`当前范围: 第 ${parsed.startLine} 行 - 第 ${parsed.endLine} 行`);
-              }
-              if (parsed.hasMoreAfter) {
-                parts.push(`提示: 还有更多内容未显示，可使用 startLine 参数继续读取`);
-              }
-              if (parsed.content !== undefined) {
-                parts.push(`\n内容:\n${parsed.content}`);
-              }
-              resultContent = parts.join("\n");
-            } else {
-              // 其他工具：简单格式化输出
-              resultContent = Object.entries(parsed)
-                .map(([key, value]) => {
-                  if (typeof value === "object") {
-                    return `${key}: ${JSON.stringify(value)}`;
-                  }
-                  return `${key}: ${value}`;
-                })
-                .join("\n");
-            }
-          } catch {
-            // 解析失败，使用原始值
-            resultContent = tc.result || "工具执行完成";
-          }
-          
-          return {
-            role: "tool" as const,
-            content: resultContent,
-            tool_call_id: tc.id,
-          };
-        });
-        
-        // 继续对话
-        const newHistory = [
-          ...messageHistory,
-          {
-            role: "assistant",
-            content: assistantContent,
-            tool_calls: toolCalls.map(tc => ({
-              id: tc.id,
-              type: "function",
-              function: {
-                name: tc.name,
-                arguments: tc.arguments,
-              },
-            })),
-          },
-          ...toolResultMessages,
-        ];
+        // 使用 toolResultFormatter 构建继续对话的消息历史
+        // 避免多次 HTTP 传输导致的 JSON 转义字符累积问题
+        const newHistory = buildContinueMessageHistory(
+          messageHistory,
+          assistantContent,
+          executedToolCalls
+        );
         
         await sendMessageToAPI(newHistory, loopCount + 1);
       } else {
@@ -733,6 +643,9 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       abortControllerRef.current = null;
     }
   }, [selectedModel, toolContext, session, executeBackendTool, addMessageMutation, requiresApproval, thinkingSettings, setMessages, pendingChangesState]);
+  
+  // 更新 sendMessageToAPI 的 ref（在函数定义后立即更新）
+  sendMessageToAPIRef.current = sendMessageToAPI;
   
   // 发送用户消息
   const sendMessage = useCallback(async (content: string) => {
@@ -807,8 +720,8 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
     clearMessages,
     createNewSession,
     currentLoopCount,
-    maxLoopCount: selectedModel?.capabilities?.aiLoop?.maxLoopCount || DEFAULT_MAX_LOOP_COUNT,
-    unlimitedLoop: selectedModel?.capabilities?.aiLoop?.unlimitedLoop || false,
+    maxLoopCount: selectedModel?.aiLoopConfig?.maxLoops || DEFAULT_MAX_LOOP_COUNT,
+    unlimitedLoop: selectedModel?.aiLoopConfig?.unlimited || false,
     pendingChanges: pendingChangesState.pendingChanges,
     currentPendingChange: pendingChangesState.currentPendingChange,
     acceptPendingChange: pendingChangesState.acceptPendingChange,

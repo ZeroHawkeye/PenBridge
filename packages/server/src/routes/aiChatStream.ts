@@ -1,36 +1,138 @@
 /**
  * AI 聊天流式 API 路由
- * 支持工具调用和 AI Loop
+ * 使用 Vercel AI SDK 支持工具调用和推理
+ * 
+ * 重构后使用统一的 Provider 适配器和消息转换服务
  */
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { streamText } from "ai";
 import { AppDataSource } from "../db";
-import { AIProvider, AIModel } from "../entities/AIProvider";
+import { AIProvider, AIModel, defaultCapabilities, defaultAILoopConfig } from "../entities/AIProvider";
 import { validateSession } from "../services/adminAuth";
 import { formatToolsForAPI, getToolExecutionLocation, getAllToolDefinitions } from "../services/aiTools";
-import { buildSystemPrompt, type ArticleContext } from "../services/promptTemplate";
+import { buildSystemPrompt } from "../services/promptTemplate";
+import { 
+  createProviderAdapter, 
+  buildStreamTextOptions,
+  type ThinkingConfig,
+} from "../services/aiProviderAdapter";
+import { 
+  convertMessagesToAISDK, 
+  setLogPrefix, 
+  logMessages,
+  type OpenAIMessage,
+} from "../services/messageConverter";
 
 export const aiChatStreamRouter = new Hono();
 
 /**
- * AI 聊天 API（支持工具调用和 AI Loop）
+ * 创建请求日志辅助函数
+ */
+function createLogger(requestId: string, startTime: number) {
+  const logPrefix = `[AI Chat Stream ${requestId}]`;
+  setLogPrefix(logPrefix);
+  
+  return {
+    logPrefix,
+    logStep: (step: string) => {
+      const elapsed = Date.now() - startTime;
+      console.log(`${logPrefix} ${step} (+${elapsed}ms)`);
+    },
+  };
+}
+
+/**
+ * 文章上下文类型 (用于内部函数)
+ */
+interface InternalArticleContext {
+  title: string;
+  contentLength: number;
+  articleId?: number;
+}
+
+/**
+ * 构建系统消息
+ */
+function buildSystemMessage(
+  existingSystemMessage: OpenAIMessage | undefined,
+  articleContext: InternalArticleContext | undefined,
+  toolInfoList: Array<{ name: string; description: string }>,
+  shouldEnableTools: boolean
+): OpenAIMessage {
+  if (existingSystemMessage) {
+    // 前端提供了自定义系统提示词，追加上下文信息
+    const contextParts: string[] = [];
+    
+    if (articleContext) {
+      contextParts.push(
+        `\n\n# 当前文章上下文\n\n你正在协助用户编辑一篇文章：\n<article-context>\n  标题: ${articleContext.title}\n  字数: ${articleContext.contentLength} 字\n  文章ID: ${articleContext.articleId}\n</article-context>`
+      );
+    }
+    
+    if (shouldEnableTools && toolInfoList.length > 0) {
+      contextParts.push(
+        `\n\n<important>\nread_article 工具返回的内容包含行号前缀（格式："行号 | 内容"）。行号仅用于定位，在使用 replace_content 等工具时，请勿在 search 参数中包含行号前缀，只提供实际的文本内容。\n</important>`
+      );
+    }
+    
+    return {
+      ...existingSystemMessage,
+      content: (existingSystemMessage.content || "") + contextParts.join(""),
+    };
+  }
+  
+  // 没有自定义系统提示词，使用模板生成完整的系统提示词
+  // 只有当 articleId 存在时才传递完整的 articleContext
+  const fullSystemPrompt = buildSystemPrompt({
+    articleContext: articleContext?.articleId 
+      ? { ...articleContext, articleId: articleContext.articleId } 
+      : undefined,
+    tools: shouldEnableTools ? toolInfoList : undefined,
+    includeEnvironment: true,
+  });
+  
+  return {
+    role: "system",
+    content: fullSystemPrompt,
+  };
+}
+
+/**
+ * 调试：打印包含工具消息的原始消息
+ */
+function debugLogToolMessages(messages: OpenAIMessage[], logPrefix: string): void {
+  const hasToolMessages = messages.some((m) => m.role === "tool" || m.tool_calls);
+  if (!hasToolMessages) return;
+  
+  console.log(`${logPrefix} 收到的原始消息 (含工具调用):`);
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    console.log(`${logPrefix}   [${i}] role=${msg.role}`);
+    if (msg.tool_calls) {
+      console.log(`${logPrefix}       tool_calls:`, JSON.stringify(msg.tool_calls).substring(0, 200));
+    }
+    if (msg.tool_call_id) {
+      console.log(`${logPrefix}       tool_call_id: ${msg.tool_call_id}`);
+      console.log(
+        `${logPrefix}       content (前200字符): ${
+          typeof msg.content === "string"
+            ? msg.content.substring(0, 200)
+            : JSON.stringify(msg.content).substring(0, 200)
+        }`
+      );
+    }
+  }
+}
+
+/**
+ * AI 聊天 API（支持工具调用和推理）
  * POST /api/ai/chat/stream
- * 
- * 完整的 AI 聊天功能，支持：
- * - 流式输出
- * - 工具调用
- * - 深度思考
- * - 视觉模型
  */
 aiChatStreamRouter.post("/", async (c) => {
   const requestId = Math.random().toString(36).substring(7);
-  const logPrefix = `[AI Chat Stream ${requestId}]`;
   const startTime = Date.now();
-
-  const logStep = (step: string) => {
-    const elapsed = Date.now() - startTime;
-    console.log(`${logPrefix} ${step} (+${elapsed}ms)`);
-  };
+  const { logPrefix, logStep } = createLogger(requestId, startTime);
 
   logStep("请求开始");
 
@@ -58,12 +160,15 @@ aiChatStreamRouter.post("/", async (c) => {
       messages,
       enableTools = true,
       articleContext,
-      // 深度思考设置（从 AI Chat 面板动态传递）
-      thinkingEnabled,
+      // 推理设置（从 AI Chat 面板动态传递）
+      reasoningEnabled,
       reasoningEffort,
     } = body;
 
     logStep(`请求体解析完成: providerId=${providerId}, modelId=${modelId}, messagesCount=${messages?.length || 0}`);
+
+    // 调试：打印包含工具消息的原始消息
+    debugLogToolMessages(messages, logPrefix);
 
     if (!providerId || !modelId || !messages) {
       logStep("错误: 缺少必要参数");
@@ -87,547 +192,341 @@ aiChatStreamRouter.post("/", async (c) => {
       where: { providerId, modelId, userId: 1 },
     });
 
-    const apiUrl = `${provider.baseUrl}/chat/completions`;
-    const capabilities = modelConfig?.capabilities;
-    const thinkingConfig = capabilities?.thinking;
-    const streamingConfig = capabilities?.streaming;
-    const functionCallingSupported = capabilities?.functionCalling?.supported;
-    const visionSupported = capabilities?.vision?.supported;
+    const capabilities = modelConfig?.capabilities || defaultCapabilities;
 
-    // 视觉模型消息格式转换函数
-    // OpenAI 和智谱 AI 的视觉模型需要将 user 消息的 content 从字符串转换为数组格式
-    // 格式: content: [{ type: "text", text: "消息内容" }, { type: "image_url", image_url: { url: "..." } }]
-    // 注意：system 消息的 content 应保持字符串格式，不需要转换
-    const convertToVisionFormat = (msg: any) => {
-      // system 消息不转换，保持字符串格式
-      if (msg.role === "system") {
-        return msg;
-      }
-      // 如果已经是数组格式，直接返回
-      if (Array.isArray(msg.content)) {
-        return msg;
-      }
-      // 如果是字符串，转换为视觉模型格式（仅 user/assistant 消息）
-      if (typeof msg.content === "string") {
-        return {
-          ...msg,
-          content: [{ type: "text", text: msg.content }],
-        };
-      }
-      // 其他情况（如 null/undefined），保持原样
-      return msg;
-    };
+    // 创建 Provider 适配器
+    const adapter = createProviderAdapter(provider);
+    const model = adapter.createModel(modelId);
+    logStep(`使用 ${provider.sdkType} SDK 创建模型: ${modelId}`);
 
-    // 预先计算工具是否启用（用于系统提示词构建）
-    const functionCallingEnabled = capabilities?.functionCalling?.supported !== false;
-    const shouldEnableTools = enableTools !== false && functionCallingEnabled;
+    // 预先计算工具是否启用
+    const shouldEnableTools = enableTools !== false && adapter.supportsFunctionCalling(capabilities);
+    logStep(`工具配置: enableTools=${enableTools}, functionCallingSupported=${capabilities.functionCalling}, 最终=${shouldEnableTools}`);
 
     // 构建系统提示
-    let systemMessage = messages.find((m: any) => m.role === "system");
-    const userMessages = messages.filter((m: any) => m.role !== "system");
+    const systemMessage = messages.find((m: OpenAIMessage) => m.role === "system");
+    const userMessages = messages.filter((m: OpenAIMessage) => m.role !== "system");
 
     // 使用模板服务构建系统提示词
-    // 如果前端没有提供 systemMessage，使用模板生成完整的系统提示词
-    // 如果前端提供了 systemMessage，将模板生成的上下文信息追加到末尾
     const toolDefinitions = shouldEnableTools ? getAllToolDefinitions() : [];
-    const toolInfoList = toolDefinitions.map(t => ({
+    const toolInfoList = toolDefinitions.map((t) => ({
       name: t.function.name,
-      description: t.function.description.split("\n")[0], // 取第一行作为简要描述
+      description: t.function.description.split("\n")[0],
     }));
 
-    // 构建文章上下文（如果有）
-    const articleContextForPrompt = articleContext ? {
-      title: articleContext.title || "无标题",
-      contentLength: articleContext.contentLength || 0,
-      articleId: articleContext.articleId,
-    } : undefined;
+    // 构建文章上下文 (articleId 必须是 number 类型)
+    const articleContextForPrompt = articleContext && articleContext.articleId
+      ? {
+          title: articleContext.title || "无标题",
+          contentLength: articleContext.contentLength || 0,
+          articleId: articleContext.articleId as number,
+        }
+      : undefined;
 
-    if (systemMessage) {
-      // 前端提供了自定义系统提示词，追加上下文信息
-      const additionalContext = buildSystemPrompt({
-        articleContext: articleContextForPrompt,
-        tools: shouldEnableTools ? toolInfoList : undefined,
-        includeEnvironment: false, // 不重复添加环境信息
-      });
-      
-      // 只追加文章上下文和工具信息部分（跳过基础提示词）
-      // 基础提示词已在前端的 systemMessage 中
-      if (articleContextForPrompt || shouldEnableTools) {
-        const contextParts: string[] = [];
-        
-        if (articleContextForPrompt) {
-          contextParts.push(`\n\n# 当前文章上下文\n\n你正在协助用户编辑一篇文章：\n<article-context>\n  标题: ${articleContextForPrompt.title}\n  字数: ${articleContextForPrompt.contentLength} 字\n  文章ID: ${articleContextForPrompt.articleId}\n</article-context>`);
-        }
-        
-        if (shouldEnableTools && toolInfoList.length > 0) {
-          contextParts.push(`\n\n<important>\nread_article 工具返回的内容包含行号前缀（格式："行号 | 内容"）。行号仅用于定位，在使用 replace_content 等工具时，请勿在 search 参数中包含行号前缀，只提供实际的文本内容。\n</important>`);
-        }
-        
-        systemMessage = {
-          ...systemMessage,
-          content: systemMessage.content + contextParts.join(""),
+    // 构建最终的系统消息
+    const finalSystemMessage = buildSystemMessage(
+      systemMessage,
+      articleContextForPrompt,
+      toolInfoList,
+      shouldEnableTools
+    );
+
+    // 转换消息格式以适配 AI SDK v6
+    const convertedUserMessages = convertMessagesToAISDK(userMessages);
+    const finalMessages = [finalSystemMessage, ...convertedUserMessages];
+
+    // 调试：打印转换后的消息格式
+    console.log(`${logPrefix} 转换后的消息 (共 ${finalMessages.length} 条):`);
+    logMessages(finalMessages as any, logPrefix);
+
+    // 构建工具配置（转换为 AI SDK 格式）
+    const tools: Record<string, any> = {};
+    if (shouldEnableTools) {
+      const apiTools = formatToolsForAPI();
+      for (const tool of apiTools) {
+        tools[tool.function.name] = {
+          description: tool.function.description,
+          parameters: tool.function.parameters,
+          // 不在服务端执行，返回给前端
         };
       }
-    } else {
-      // 没有自定义系统提示词，使用模板生成完整的系统提示词
-      const fullSystemPrompt = buildSystemPrompt({
-        articleContext: articleContextForPrompt,
-        tools: shouldEnableTools ? toolInfoList : undefined,
-        includeEnvironment: true,
-      });
-      
-      systemMessage = {
-        role: "system",
-        content: fullSystemPrompt,
-      };
+      logStep(`已添加 ${apiTools.length} 个工具: ${apiTools.map((t) => t.function.name).join(", ")}`);
     }
 
-    // 组装最终消息
-    let finalMessages = systemMessage
-      ? [systemMessage, ...userMessages]
-      : userMessages;
-
-    // 如果是视觉模型，转换消息格式
-    // 视觉模型（OpenAI gpt-4-vision, 智谱 glm-4v 等）需要将 content 转换为数组格式
-    if (visionSupported) {
-      finalMessages = finalMessages.map(convertToVisionFormat);
-      logStep(`视觉模型检测: 已转换 ${finalMessages.length} 条消息为视觉格式`);
-    }
-
-    // 构建请求体
-    const requestBody: Record<string, any> = {
-      model: modelId,
-      messages: finalMessages,
-      max_tokens: modelConfig?.parameters?.maxTokens || 4096,
-      temperature: modelConfig?.parameters?.temperature || 0.7,
-      stream: streamingConfig?.supported !== false && streamingConfig?.enabled !== false,
+    // 构建推理配置
+    const thinkingConfig: ThinkingConfig = {
+      enabled: Boolean(reasoningEnabled && capabilities.reasoning),
+      reasoningEffort: reasoningEffort || "medium",
     };
 
-    // 添加工具定义
-    // 注意：OpenAI/智谱/DeepSeek 等主流平台都不需要特殊配置来启用工具调用
-    // 只要在请求中传递 tools 参数，模型就会自动识别并使用
-    // 工具启用条件：
-    // 1. 请求中 enableTools !== false（默认启用）
-    // 2. 模型配置中 functionCalling.supported !== false（默认支持）
-    // 注：某些视觉模型（如 glm-4.6v-flash）不支持工具调用，需要在模型配置中设置 functionCalling.supported = false
-    // （functionCallingEnabled 和 shouldEnableTools 已在前面计算）
-    logStep(`工具配置: enableTools=${enableTools}, functionCallingSupported=${functionCallingEnabled}, 最终=${shouldEnableTools}`);
-
-    if (shouldEnableTools) {
-      const tools = formatToolsForAPI();
-      if (tools.length > 0) {
-        requestBody.tools = tools;
-        requestBody.tool_choice = "auto";
-
-        // 智谱 AI 特殊支持：启用工具调用流式输出
-        // 根据供应商配置的 apiType 来判断是否启用 tool_stream
-        // 智谱 AI 使用特殊的 tool_stream 格式，参数通过 argumentsDelta 增量传输
-        const isZhipuAI = provider.apiType === "zhipu";
-        if (isZhipuAI && requestBody.stream) {
-          requestBody.tool_stream = true;
-          logStep(`智谱 AI 检测: 已启用 tool_stream`);
-        }
-
-        logStep(`已添加 ${tools.length} 个工具: ${tools.map(t => t.function.name).join(', ')}`);
-      }
-    } else {
-      logStep(`工具调用已禁用`);
-    }
-
-    // 添加深度思考配置
-    // 深度思考是否启用现在由请求参数 thinkingEnabled 控制（从 AI Chat 面板动态传递）
-    // 而不再从模型配置中读取 thinking.enabled
-    //
-    // 重要：当模型支持深度思考时，无论用户是否启用，都需要显式设置配置
-    // 因为某些模型可能默认开启深度思考，需要显式禁用
-    if (thinkingConfig?.supported) {
-      const apiFormat = thinkingConfig.apiFormat || "standard";
-
-      if (thinkingEnabled) {
-        // 用户启用了深度思考
-        if (apiFormat === "openai") {
-          // OpenAI 格式：使用请求中传递的 reasoningEffort，默认为 medium
-          requestBody.reasoning = {
-            effort: reasoningEffort || "medium",
-          };
-          if (thinkingConfig.reasoningSummary && thinkingConfig.reasoningSummary !== "disabled") {
-            requestBody.reasoning.summary = thinkingConfig.reasoningSummary;
-          }
-        } else {
-          // 标准格式（智谱/DeepSeek）
-          requestBody.thinking = { type: "enabled" };
-        }
-      } else {
-        // 用户未启用深度思考，显式禁用（防止模型默认开启）
-        if (apiFormat === "openai") {
-          // OpenAI 格式：不发送 reasoning 参数即可禁用，
-          // 但为了明确性，可以设置 reasoning 为 undefined 或不设置
-          // OpenAI 推理模型在不传递 reasoning 参数时应该使用默认行为
-          // 目前 OpenAI 没有明确的禁用参数，不传递 reasoning 即可
-          logStep("深度思考未启用（OpenAI 格式）: 不发送 reasoning 参数");
-        } else {
-          // 标准格式（智谱/DeepSeek）：显式设置 disabled
-          requestBody.thinking = { type: "disabled" };
-          logStep("深度思考未启用（标准格式）: 已设置 thinking.type = disabled");
-        }
-      }
-    }
-
-    logStep("开始发起流式 API 请求");
-    logStep(`请求体: tools=${requestBody.tools?.length || 0}个, tool_choice=${requestBody.tool_choice || '无'}`);
-    // 调试：打印完整请求体（仅在开发时使用）
-    console.log(`${logPrefix} 完整请求体:`, JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${provider.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
+    // 构建 streamText 选项
+    const streamOptions = buildStreamTextOptions(adapter, modelConfig || ({} as AIModel), {
+      thinkingConfig,
+      temperature: modelConfig?.parameters?.temperature || 0.7,
+      maxOutputTokens: modelConfig?.parameters?.maxTokens || 4096,
     });
 
-    logStep(`API 响应返回: status=${response.status}`);
+    logStep("开始流式响应");
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = (errorData as any).error?.message ||
-                          `HTTP ${response.status}: ${response.statusText}`;
-      logStep(`错误: ${errorMessage}`);
-      return c.json({ error: errorMessage }, 400);
-    }
+    // 重试配置
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000;
 
-    const contentType = response.headers.get("content-type") || "";
-    const isStream = contentType.includes("text/event-stream") ||
-                     contentType.includes("application/octet-stream") ||
-                     (response.ok && response.body);
+    return streamSSE(c, async (stream) => {
+      let fullContent = "";
+      let fullReasoning = "";
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let firstChunkTime = 0;
+      let isReasoning = false;
+      const toolCalls: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+        executionLocation: string;
+      }> = [];
 
-    if (isStream && response.body) {
-      logStep("开始处理 SSE 流式响应");
+      // 重试辅助函数
+      const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      return streamSSE(c, async (stream) => {
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let fullContent = "";
-        let fullReasoning = "";
-        let toolCalls: Array<{
-          id: string;
-          type: "function";
-          function: {
-            name: string;
-            arguments: string;
-          };
-        }> = [];
-        let currentToolCallIndex = -1;
-        let promptTokens = 0;
-        let completionTokens = 0;
-        let chunkCount = 0;
-        let firstChunkTime = 0;
-        let isReasoning = false;
-
+      // 执行流式请求（支持重试）
+      const executeStreamWithRetry = async (retryCount: number = 0): Promise<ReturnType<typeof streamText>> => {
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              logStep(`流式读取完成: 共 ${chunkCount} 个数据块`);
+          const result = streamText({
+            model,
+            messages: finalMessages as any,
+            tools: shouldEnableTools && Object.keys(tools).length > 0 ? tools : undefined,
+            ...streamOptions,
+          });
+          return result;
+        } catch (err) {
+          if (retryCount < MAX_RETRIES) {
+            logStep(`请求失败，${RETRY_DELAY}ms 后重试 (${retryCount + 1}/${MAX_RETRIES}): ${err}`);
+            await delay(RETRY_DELAY);
+            return executeStreamWithRetry(retryCount + 1);
+          }
+          throw err;
+        }
+      };
+
+      try {
+        const result = await executeStreamWithRetry();
+
+        // 处理流式输出
+        for await (const part of result.fullStream) {
+          if (firstChunkTime === 0) {
+            firstChunkTime = Date.now() - startTime;
+            logStep(`收到首个数据块 (首字节延迟: ${firstChunkTime}ms)`);
+          }
+
+          switch (part.type) {
+            case "text-delta":
+              // 正常文本内容
+              if (isReasoning) {
+                isReasoning = false;
+                await stream.writeSSE({
+                  event: "reasoning_end",
+                  data: JSON.stringify({ message: "思考完成，开始回答..." }),
+                });
+              }
+              fullContent += part.text;
+              await stream.writeSSE({
+                event: "content",
+                data: JSON.stringify({ content: part.text }),
+              });
               break;
-            }
 
-            chunkCount++;
-            if (chunkCount === 1) {
-              firstChunkTime = Date.now() - startTime;
-              logStep(`收到首个数据块 (首字节延迟: ${firstChunkTime}ms)`);
-            }
+            case "reasoning-start":
+              // 推理开始 - 暂不发送，等待有实际内容时再发送
+              isReasoning = true;
+              break;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
+            case "reasoning-delta":
+              // 推理内容增量 - 只有非空内容才发送
+              if (part.text && part.text.trim()) {
+                // 首次收到有效内容时发送 reasoning_start
+                if (fullReasoning.length === 0) {
+                  await stream.writeSSE({
+                    event: "reasoning_start",
+                    data: JSON.stringify({ message: "开始深度思考..." }),
+                  });
+                }
+                fullReasoning += part.text;
+                await stream.writeSSE({
+                  event: "reasoning",
+                  data: JSON.stringify({ content: part.text }),
+                });
+              }
+              break;
 
-            for (const line of lines) {
-              const trimmedLine = line.trim();
-              if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-              if (!trimmedLine.startsWith("data: ")) continue;
+            case "reasoning-end":
+              // 推理结束 - 只有确实产生了推理内容才发送结束事件
+              isReasoning = false;
+              if (fullReasoning.trim()) {
+                await stream.writeSSE({
+                  event: "reasoning_end",
+                  data: JSON.stringify({ message: "思考完成，开始回答..." }),
+                });
+              }
+              break;
 
-              try {
-                const jsonStr = trimmedLine.slice(6);
-                const data = JSON.parse(jsonStr);
-                const delta = data.choices?.[0]?.delta || {};
-                const content = delta.content || "";
-                const reasoningContent = delta.reasoning_content || "";
+            case "tool-call":
+              // 工具调用
+              // 注意: AI SDK 使用 `input` 属性存储工具参数
+              const toolCallInput = (part as any).args || (part as any).input || {};
+              const toolCall = {
+                id: part.toolCallId,
+                type: "function" as const,
+                function: {
+                  name: part.toolName,
+                  arguments: JSON.stringify(toolCallInput),
+                },
+                executionLocation: getToolExecutionLocation(part.toolName) || "frontend",
+              };
+              toolCalls.push(toolCall);
 
-                // 处理工具调用
-                if (delta.tool_calls) {
-                  for (const toolCall of delta.tool_calls) {
-                    const index = toolCall.index;
+              // 发送工具调用开始事件
+              await stream.writeSSE({
+                event: "tool_call_start",
+                data: JSON.stringify({
+                  index: toolCalls.length - 1,
+                  id: toolCall.id,
+                  name: toolCall.function.name,
+                  executionLocation: toolCall.executionLocation,
+                }),
+              });
 
-                    // 智谱 AI tool_stream 格式检测
-                    // 智谱格式: {"index":0,"id":"call_xxx","argumentsDelta":"增量","argumentsLength":369}
-                    // 标准格式: {"index":0,"function":{"name":"xxx","arguments":"增量"}}
-                    const isZhipuFormat = toolCall.argumentsDelta !== undefined;
+              // 发送完整参数
+              await stream.writeSSE({
+                event: "tool_call_arguments",
+                data: JSON.stringify({
+                  index: toolCalls.length - 1,
+                  id: toolCall.id,
+                  argumentsDelta: toolCall.function.arguments,
+                  argumentsLength: toolCall.function.arguments.length,
+                }),
+              });
+              break;
 
-                    if (isZhipuFormat) {
-                      // 智谱 AI tool_stream 格式处理
-                      // 智谱格式可能包含: id, argumentsDelta, argumentsLength, function.name
-                      if (index !== undefined && index >= toolCalls.length) {
-                        // 新的工具调用：创建对象并发送 tool_call_start 事件
-                        const newToolCall = {
-                          id: toolCall.id || `call_${index}`,
-                          type: "function" as const,
-                          function: {
-                            name: toolCall.function?.name || "",
-                            arguments: toolCall.argumentsDelta || "",
-                          },
-                        };
-                        toolCalls.push(newToolCall);
-                        currentToolCallIndex = index;
+            case "finish":
+              // 获取 usage 信息
+              if (part.totalUsage) {
+                promptTokens = part.totalUsage.inputTokens || 0;
+                completionTokens = part.totalUsage.outputTokens || 0;
+              }
+              logStep(
+                `finish_reason: ${part.finishReason}, fullContent长度: ${fullContent.length}, toolCalls数量: ${toolCalls.length}`
+              );
 
-                        // 立即发送工具调用开始事件（如果有名称）
-                        if (newToolCall.function.name) {
-                          await stream.writeSSE({
-                            event: "tool_call_start",
-                            data: JSON.stringify({
-                              index,
-                              id: newToolCall.id,
-                              name: newToolCall.function.name,
-                              executionLocation: getToolExecutionLocation(newToolCall.function.name) || "frontend",
-                            }),
-                          });
-                        }
+              // 检查是否是网络错误导致的空响应
+              const rawFinishReason = (part as any).rawFinishReason;
+              if (fullContent.length === 0 && toolCalls.length === 0) {
+                console.log(`${logPrefix} 警告: AI 返回空内容且无工具调用！`);
+                console.log(`${logPrefix} finish part 详情:`, JSON.stringify(part, null, 2).substring(0, 1000));
+                
+                // 打印更多诊断信息
+                const response = (part as any).response;
+                if (response) {
+                  console.log(`${logPrefix} 响应详情: modelId=${response.modelId}, id=${response.id}`);
+                }
 
-                        // 发送参数增量事件
-                        if (toolCall.argumentsDelta) {
-                          await stream.writeSSE({
-                            event: "tool_call_arguments",
-                            data: JSON.stringify({
-                              index,
-                              id: newToolCall.id,
-                              argumentsDelta: toolCall.argumentsDelta,
-                              argumentsLength: toolCall.argumentsLength || newToolCall.function.arguments.length,
-                            }),
-                          });
-                        }
-                      } else if (index !== undefined && index < toolCalls.length) {
-                        // 追加参数增量到现有工具调用
-                        toolCalls[index].function.arguments += toolCall.argumentsDelta || "";
+                // 如果是网络错误或异常结束，发送错误事件给前端
+                if (rawFinishReason === "network_error" || part.finishReason === "other") {
+                  const errorMsg = `AI 响应异常 (${rawFinishReason || part.finishReason})，可能是网络问题或请求被中断，请重试`;
+                  await stream.writeSSE({
+                    event: "error",
+                    data: JSON.stringify({
+                      error: errorMsg,
+                      retryable: true,
+                      rawReason: rawFinishReason,
+                    }),
+                  });
+                }
+              }
+              break;
 
-                        // 更新工具调用 ID（如果有）
-                        if (toolCall.id) {
-                          toolCalls[index].id = toolCall.id;
-                        }
+            case "error":
+              logStep(`流处理错误: ${part.error}`);
+              console.log(`${logPrefix} 错误详情:`, part);
+              await stream.writeSSE({
+                event: "error",
+                data: JSON.stringify({ error: String(part.error) }),
+              });
+              break;
 
-                        // 如果工具名称之前为空，现在有了，发送 tool_call_start 事件
-                        if (toolCall.function?.name && !toolCalls[index].function.name) {
-                          toolCalls[index].function.name = toolCall.function.name;
-                          await stream.writeSSE({
-                            event: "tool_call_start",
-                            data: JSON.stringify({
-                              index,
-                              id: toolCalls[index].id,
-                              name: toolCall.function.name,
-                              executionLocation: getToolExecutionLocation(toolCall.function.name) || "frontend",
-                            }),
-                          });
-                        }
-
-                        // 发送参数增量事件
-                        if (toolCall.argumentsDelta) {
-                          await stream.writeSSE({
-                            event: "tool_call_arguments",
-                            data: JSON.stringify({
-                              index,
-                              id: toolCalls[index].id,
-                              argumentsDelta: toolCall.argumentsDelta,
-                              argumentsLength: toolCall.argumentsLength || toolCalls[index].function.arguments.length,
-                            }),
-                          });
-                        }
-                      }
-                    } else {
-                      // 标准 OpenAI 格式处理
-                      // 新的工具调用
-                      if (index !== undefined && index >= toolCalls.length) {
-                        const newToolCall = {
-                          id: toolCall.id || `call_${index}`,
-                          type: "function" as const,
-                          function: {
-                            name: toolCall.function?.name || "",
-                            arguments: toolCall.function?.arguments || "",
-                          },
-                        };
-                        toolCalls.push(newToolCall);
-                        currentToolCallIndex = index;
-
-                        // 立即发送工具调用开始事件（让前端尽早显示）
-                        if (newToolCall.function.name) {
-                          await stream.writeSSE({
-                            event: "tool_call_start",
-                            data: JSON.stringify({
-                              index,
-                              id: newToolCall.id,
-                              name: newToolCall.function.name,
-                              executionLocation: getToolExecutionLocation(newToolCall.function.name) || "frontend",
-                            }),
-                          });
-                        }
-                      } else if (currentToolCallIndex >= 0 && toolCall.function?.arguments) {
-                        // 追加参数
-                        toolCalls[currentToolCallIndex].function.arguments += toolCall.function.arguments;
-
-                        // 实时发送工具参数增量（让前端可以实时显示进度）
-                        await stream.writeSSE({
-                          event: "tool_call_arguments",
-                          data: JSON.stringify({
-                            index: currentToolCallIndex,
-                            id: toolCalls[currentToolCallIndex].id,
-                            argumentsDelta: toolCall.function.arguments,
-                            argumentsLength: toolCalls[currentToolCallIndex].function.arguments.length,
-                          }),
-                        });
-                      }
-
-                      // 更新工具调用 ID
-                      if (toolCall.id && currentToolCallIndex >= 0) {
-                        toolCalls[currentToolCallIndex].id = toolCall.id;
-                      }
-                      // 更新工具名称（如果是新获取到的名称，也发送事件）
-                      if (toolCall.function?.name && currentToolCallIndex >= 0) {
-                        const prevName = toolCalls[currentToolCallIndex].function.name;
-                        toolCalls[currentToolCallIndex].function.name = toolCall.function.name;
-
-                        // 如果之前没有名称，现在有了，发送工具调用开始事件
-                        if (!prevName && toolCall.function.name) {
-                          await stream.writeSSE({
-                            event: "tool_call_start",
-                            data: JSON.stringify({
-                              index: currentToolCallIndex,
-                              id: toolCalls[currentToolCallIndex].id,
-                              name: toolCall.function.name,
-                              executionLocation: getToolExecutionLocation(toolCall.function.name) || "frontend",
-                            }),
-                          });
-                        }
-                      }
+            default:
+              // 捕获其他未处理的事件类型
+              const partType = (part as any).type;
+              if (partType === "start-step") {
+                const request = (part as any).request;
+                if (request?.body?.messages) {
+                  console.log(`${logPrefix} start-step: 发送了 ${request.body.messages.length} 条消息到 API`);
+                  const totalLength = JSON.stringify(request.body.messages).length;
+                  console.log(`${logPrefix} start-step: 消息体总长度: ${totalLength} 字符`);
+                  // 调试：打印实际发送到 API 的消息格式
+                  for (let i = 0; i < request.body.messages.length; i++) {
+                    const msg = request.body.messages[i];
+                    const contentType = typeof msg.content;
+                    const contentLength = typeof msg.content === 'string' 
+                      ? msg.content.length 
+                      : JSON.stringify(msg.content).length;
+                    console.log(`${logPrefix} start-step 消息[${i}]: role=${msg.role}, content类型=${contentType}, content长度=${contentLength}`);
+                    if (msg.role === "tool") {
+                      // 打印完整的 tool 消息（用于调试智谱 API 问题）
+                      console.log(`${logPrefix} start-step 消息[${i}] tool完整内容:`, JSON.stringify(msg));
+                    }
+                    if (msg.role === "assistant" && msg.tool_calls) {
+                      console.log(`${logPrefix} start-step 消息[${i}] assistant tool_calls:`, JSON.stringify(msg.tool_calls));
                     }
                   }
                 }
-
-                // 处理思维链（标准格式）
-                if (reasoningContent) {
-                  if (!isReasoning) {
-                    isReasoning = true;
-                    await stream.writeSSE({
-                      event: "reasoning_start",
-                      data: JSON.stringify({ message: "开始深度思考..." }),
-                    });
-                  }
-
-                  fullReasoning += reasoningContent;
-                  await stream.writeSSE({
-                    event: "reasoning",
-                    data: JSON.stringify({ content: reasoningContent }),
-                  });
-                }
-
-                // 处理正常内容
-                if (content) {
-                  if (isReasoning) {
-                    isReasoning = false;
-                    await stream.writeSSE({
-                      event: "reasoning_end",
-                      data: JSON.stringify({ message: "思考完成，开始回答..." }),
-                    });
-                  }
-
-                  fullContent += content;
-                  await stream.writeSSE({
-                    event: "content",
-                    data: JSON.stringify({ content }),
-                  });
-                }
-
-                // 获取 usage 信息
-                if (data.usage) {
-                  promptTokens = data.usage.prompt_tokens || 0;
-                  completionTokens = data.usage.completion_tokens || 0;
-                }
-
-                // 检查 finish_reason
-                const finishReason = data.choices?.[0]?.finish_reason;
-                if (finishReason) {
-                  logStep(`finish_reason: ${finishReason}`);
-                  if (finishReason === "tool_calls") {
-                    logStep("AI 请求调用工具");
-                  }
-                }
-              } catch {
-                // 忽略解析错误
+              } else if (partType === "finish-step") {
+                console.log(`${logPrefix} finish-step 详情:`, JSON.stringify(part).substring(0, 500));
+              } else {
+                console.log(`${logPrefix} 事件: ${partType}`);
               }
-            }
+              break;
           }
+        }
 
-          // 发送工具调用事件（如果有）
-          if (toolCalls.length > 0) {
-            logStep(`检测到 ${toolCalls.length} 个工具调用`);
-
-            // 为每个工具调用添加执行位置信息
-            const toolCallsWithLocation = toolCalls.map(tc => ({
-              ...tc,
-              executionLocation: getToolExecutionLocation(tc.function.name) || "frontend",
-            }));
-
-            await stream.writeSSE({
-              event: "tool_calls",
-              data: JSON.stringify({ toolCalls: toolCallsWithLocation }),
-            });
-          }
-
-          // 发送完成事件
-          const duration = Date.now() - startTime;
-
+        // 发送工具调用事件（如果有）
+        if (toolCalls.length > 0) {
+          logStep(`检测到 ${toolCalls.length} 个工具调用`);
           await stream.writeSSE({
-            event: "done",
-            data: JSON.stringify({
-              success: true,
-              duration,
-              firstChunkTime,
-              hasReasoning: fullReasoning.length > 0,
-              hasToolCalls: toolCalls.length > 0,
-              usage: {
-                promptTokens,
-                completionTokens,
-                totalTokens: promptTokens + completionTokens,
-              },
-            }),
-          });
-
-          logStep(`请求完成 - 总耗时: ${duration}ms`);
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : "流处理错误";
-          logStep(`流处理错误: ${errorMsg}`);
-
-          await stream.writeSSE({
-            event: "error",
-            data: JSON.stringify({ error: errorMsg }),
+            event: "tool_calls",
+            data: JSON.stringify({ toolCalls }),
           });
         }
-      });
-    }
 
-    // 非流式响应处理
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
-    const responseToolCalls = data.choices?.[0]?.message?.tool_calls || [];
+        // 发送完成事件
+        const duration = Date.now() - startTime;
+        await stream.writeSSE({
+          event: "done",
+          data: JSON.stringify({
+            success: true,
+            duration,
+            firstChunkTime,
+            hasReasoning: fullReasoning.length > 0,
+            hasToolCalls: toolCalls.length > 0,
+            usage: {
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+            },
+          }),
+        });
 
-    return c.json({
-      success: true,
-      content,
-      toolCalls: responseToolCalls.map((tc: any) => ({
-        ...tc,
-        executionLocation: getToolExecutionLocation(tc.function.name) || "frontend",
-      })),
-      usage: data.usage,
-      duration: Date.now() - startTime,
+        logStep(`请求完成 - 总耗时: ${duration}ms`);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "流处理错误";
+        logStep(`流处理错误: ${errorMsg}`);
+        console.error(`${logPrefix} 流处理错误:`, error);
+
+        await stream.writeSSE({
+          event: "error",
+          data: JSON.stringify({ error: errorMsg }),
+        });
+      }
     });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "请求失败";

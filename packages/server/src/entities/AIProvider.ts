@@ -7,8 +7,15 @@ import {
 } from "typeorm";
 
 /**
+ * AI SDK 类型
+ * - openai: 使用 @ai-sdk/openai，适用于 OpenAI 官方模型（原生支持 reasoning）
+ * - openai-compatible: 使用 @ai-sdk/openai-compatible，适用于兼容 OpenAI API 的第三方服务
+ */
+export type AISDKType = "openai" | "openai-compatible";
+
+/**
  * AI 供应商实体
- * 存储 AI 供应商的基础配置（如 OpenAI、Claude、Gemini 等）
+ * 存储 AI 供应商的基础配置（如 OpenAI、智谱、DeepSeek 等）
  */
 @Entity("ai_providers")
 export class AIProvider {
@@ -18,7 +25,7 @@ export class AIProvider {
   @Column()
   userId!: number;
 
-  // 供应商名称（用户自定义，如"OpenAI"、"我的 Claude"）
+  // 供应商名称（用户自定义，如"OpenAI"、"智谱 AI"）
   @Column()
   name!: string;
 
@@ -38,17 +45,54 @@ export class AIProvider {
   @Column({ default: 0 })
   order!: number;
 
-  // API 类型（用于确定流式工具调用的格式）
-  // - openai: 标准 OpenAI 格式，tool call 参数通过 function.arguments 增量传输
-  // - zhipu: 智谱 AI 格式，需要 tool_stream 参数，参数通过 argumentsDelta 增量传输
-  @Column({ default: "openai" })
-  apiType!: "openai" | "zhipu";
+  /**
+   * SDK 类型
+   * - openai: OpenAI 官方 SDK，原生支持 reasoning/thinking 等高级功能
+   * - openai-compatible: OpenAI 兼容 SDK，适用于智谱、DeepSeek、通义千问等
+   */
+  @Column({ type: "text", default: "openai-compatible" })
+  sdkType!: AISDKType;
 
   @CreateDateColumn()
   createdAt!: Date;
 
   @UpdateDateColumn()
   updatedAt!: Date;
+}
+
+/**
+ * 模型能力配置
+ */
+export interface ModelCapabilities {
+  // 是否支持推理/深度思考（如 o1、DeepSeek-R1 等）
+  reasoning: boolean;
+  // 是否支持流式输出
+  streaming: boolean;
+  // 是否支持工具调用/函数调用
+  functionCalling: boolean;
+  // 是否支持视觉理解（多模态）
+  vision: boolean;
+}
+
+/**
+ * AI Loop 配置（Agent 式多步任务）
+ */
+export interface AILoopConfig {
+  // 最大循环次数（防止死循环）
+  maxLoops: number;
+  // 是否不限制循环次数（危险：可能导致无限循环和高额 API 费用）
+  unlimited: boolean;
+}
+
+/**
+ * 模型参数配置
+ */
+export interface ModelParameters {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
 }
 
 /**
@@ -67,7 +111,7 @@ export class AIModel {
   @Column()
   providerId!: number;
 
-  // 模型标识（如 gpt-4o、claude-3-opus 等）
+  // 模型标识（如 gpt-4o、glm-4-plus 等）
   @Column()
   modelId!: string;
 
@@ -91,62 +135,17 @@ export class AIModel {
   @Column({ type: "integer", nullable: true })
   contextLength?: number;
 
-  // 模型参数配置（JSON 格式，存储 temperature、max_tokens 等）
+  // 模型参数配置
   @Column({ type: "simple-json", nullable: true })
-  parameters?: {
-    temperature?: number;
-    maxTokens?: number;
-    topP?: number;
-    frequencyPenalty?: number;
-    presencePenalty?: number;
-  };
+  parameters?: ModelParameters;
 
   // 模型能力配置
-  // 定义该模型支持哪些功能，以及如何配置
   @Column({ type: "simple-json", nullable: true })
-  capabilities?: {
-    // 深度思考/推理模式
-    thinking?: {
-      // 该模型是否支持深度思考功能
-      supported: boolean;
-      // API 格式类型（用于确定请求格式）
-      // - standard: 标准格式，使用 thinking.type = "enabled" | "disabled"
-      //   适用于：智谱 GLM、DeepSeek 等兼容 API
-      // - openai: OpenAI 专用格式，使用 reasoning.effort = "low" | "medium" | "high"
-      //   适用于：OpenAI o1/o3/gpt-5 等推理模型
-      apiFormat?: "standard" | "openai";
-      // OpenAI 推理摘要类型 (仅 openai 格式使用，在设置中固定配置)
-      // - auto: 自动生成摘要
-      // - detailed: 详细摘要
-      // - concise: 简洁摘要
-      // - disabled: 不生成摘要
-      // 注意：OpenAI 不返回原始思维链，只能通过摘要了解推理过程
-      reasoningSummary?: "auto" | "detailed" | "concise" | "disabled";
-      // 注意：以下字段已移至 AI Chat 面板动态选择，不再在模型配置中固定：
-      // - enabled: 是否启用深度思考（在 AI Chat 面板中通过开关控制）
-      // - reasoningEffort: OpenAI 推理努力程度（在 AI Chat 面板中选择）
-    };
-    // 流式输出
-    streaming?: {
-      supported: boolean;
-      enabled: boolean;
-    };
-    // 函数调用/工具使用
-    functionCalling?: {
-      supported: boolean;
-    };
-    // 视觉理解（多模态）
-    vision?: {
-      supported: boolean;
-    };
-    // AI Loop 配置（Agent 式多步任务）
-    aiLoop?: {
-      // 最大循环次数（防止死循环）
-      maxLoopCount: number;
-      // 不限制循环次数（危险：可能导致无限循环和高额 API 费用）
-      unlimitedLoop?: boolean;
-    };
-  };
+  capabilities?: ModelCapabilities;
+
+  // AI Loop 配置
+  @Column({ type: "simple-json", nullable: true })
+  aiLoopConfig?: AILoopConfig;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -154,3 +153,21 @@ export class AIModel {
   @UpdateDateColumn()
   updatedAt!: Date;
 }
+
+/**
+ * 默认模型能力配置
+ */
+export const defaultCapabilities: ModelCapabilities = {
+  reasoning: false,
+  streaming: true,
+  functionCalling: true,
+  vision: false,
+};
+
+/**
+ * 默认 AI Loop 配置
+ */
+export const defaultAILoopConfig: AILoopConfig = {
+  maxLoops: 20,
+  unlimited: false,
+};

@@ -31,7 +31,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description: "读取当前文章的内容",
     type: "read",
     executionLocation: "frontend",
-    defaultRequiresApproval: true,
+    defaultRequiresApproval: false, // 只读工具不需要审核
   },
   {
     name: "update_title",
@@ -264,17 +264,17 @@ export interface AIModelInfo {
   providerName: string;
   // 上下文最大长度（tokens）- 用于展示使用进度
   contextLength?: number;
+  // 简化后的能力配置
   capabilities?: {
-    thinking?: { 
-      supported: boolean;
-      // API 格式类型：standard（智谱/DeepSeek）或 openai（o1/o3/gpt-5）
-      apiFormat?: "standard" | "openai";
-      // 推理摘要（仅 openai 格式，在设置中固定配置）
-      reasoningSummary?: "auto" | "detailed" | "concise" | "disabled";
-    };
-    streaming?: { supported: boolean; enabled: boolean };
-    functionCalling?: { supported: boolean };
-    aiLoop?: { maxLoopCount: number; unlimitedLoop?: boolean };
+    reasoning: boolean;
+    streaming: boolean;
+    functionCalling: boolean;
+    vision: boolean;
+  };
+  // AI 循环配置（从 capabilities 中分离）
+  aiLoopConfig?: {
+    maxLoops: number;
+    unlimited: boolean;
   };
 }
 

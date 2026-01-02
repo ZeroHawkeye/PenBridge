@@ -61,10 +61,25 @@ export async function executeFrontendTool(
         const startLine = args.startLine as number | undefined;
         const endLine = args.endLine as number | undefined;
         const MAX_LINES = 2000; // 最大读取行数限制
+        const MAX_CHARS = 3000; // 最大字符数限制，避免智谱等 API 返回 network_error
         
         // 将内容按行分割
         const lines = context.content.split('\n');
         const totalLines = lines.length;
+        
+        // 辅助函数：限制内容长度
+        const truncateContent = (content: string, maxChars: number): { text: string; truncated: boolean } => {
+          if (content.length <= maxChars) {
+            return { text: content, truncated: false };
+          }
+          // 在最后一个完整行处截断
+          const truncated = content.substring(0, maxChars);
+          const lastNewline = truncated.lastIndexOf('\n');
+          if (lastNewline > maxChars * 0.5) {
+            return { text: truncated.substring(0, lastNewline), truncated: true };
+          }
+          return { text: truncated, truncated: true };
+        };
         
         // 如果指定了行范围，按行读取
         if (startLine !== undefined) {
@@ -87,21 +102,29 @@ export async function executeFrontendTool(
             selectedLines.push(`${lineNum} | ${lines[i]}`);
           }
           
+          // 应用字符数限制
+          const rawContent = selectedLines.join('\n');
+          const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
+          const actualEndLine = truncated 
+            ? start + contentText.split('\n').length - 1 
+            : Math.min(end, totalLines);
+          
           return {
             success: true,
             result: {
-              content: selectedLines.join('\n'),
+              content: contentText,
               startLine: start,
-              endLine: Math.min(end, totalLines),
+              endLine: actualEndLine,
               totalLines,
               hasMoreBefore: start > 1,
-              hasMoreAfter: end < totalLines,
+              hasMoreAfter: actualEndLine < totalLines,
+              ...(truncated ? { note: `内容已截断，请使用 startLine/endLine 参数分段读取` } : {}),
               ...(section === "all" || section === "title" ? { title: context.title } : {}),
             }
           };
         }
         
-        // 不指定行范围时的默认模式（限制最大 2000 行）
+        // 不指定行范围时的默认模式（限制最大 2000 行和字符数）
         switch (section) {
           case "title":
             return { success: true, result: { title: context.title } };
@@ -112,33 +135,51 @@ export async function executeFrontendTool(
               const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
               return `${lineNum} | ${line}`;
             });
+            
+            // 应用字符数限制
+            const rawContent = numberedLines.join('\n');
+            const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
+            const actualEndLine = truncated 
+              ? contentText.split('\n').length 
+              : linesToRead;
+            
             return { 
               success: true, 
               result: { 
-                content: numberedLines.join('\n'),
+                content: contentText,
                 totalLines,
                 startLine: 1,
-                endLine: linesToRead,
-                hasMoreAfter: linesToRead < totalLines,
+                endLine: actualEndLine,
+                hasMoreAfter: actualEndLine < totalLines,
+                ...(truncated ? { note: `内容已截断，请使用 startLine/endLine 参数分段读取` } : {}),
               } 
             };
           }
           default: {
-            // all: 返回标题和带行号的内容（限制最大 2000 行）
+            // all: 返回标题和带行号的内容（限制最大 2000 行和字符数）
             const linesToRead = Math.min(totalLines, MAX_LINES);
             const numberedLines = lines.slice(0, linesToRead).map((line, i) => {
               const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
               return `${lineNum} | ${line}`;
             });
+            
+            // 应用字符数限制
+            const rawContent = numberedLines.join('\n');
+            const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
+            const actualEndLine = truncated 
+              ? contentText.split('\n').length 
+              : linesToRead;
+            
             return {
               success: true,
               result: {
                 title: context.title,
-                content: numberedLines.join('\n'),
+                content: contentText,
                 totalLines,
                 startLine: 1,
-                endLine: linesToRead,
-                hasMoreAfter: linesToRead < totalLines,
+                endLine: actualEndLine,
+                hasMoreAfter: actualEndLine < totalLines,
+                ...(truncated ? { note: `内容已截断，请使用 startLine/endLine 参数分段读取` } : {}),
               }
             };
           }
