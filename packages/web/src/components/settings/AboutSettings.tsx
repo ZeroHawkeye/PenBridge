@@ -17,8 +17,8 @@ import { isElectron } from "./utils";
 import type { UpdateStatusType } from "./types";
 
 // GitHub Release 页面地址
-const GITHUB_RELEASES_URL = "https://github.com/ZeroHawkeye/PenBridge/releases";
-const GITHUB_REPO_URL = "https://github.com/ZeroHawkeye/PenBridge";
+const GITHUB_RELEASES_URL = "https://github.com/zerx-lab/PenBridge/releases";
+const GITHUB_REPO_URL = "https://github.com/zerx-lab/PenBridge";
 
 // 关于组件
 export function AboutSettings() {

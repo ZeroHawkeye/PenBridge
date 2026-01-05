@@ -2,7 +2,7 @@
   "name": "pen-bridge-electron",
   "version": "0.3.5",
   "description": "PenBridge - 文章管理与发布工具",
-  "homepage": "https://github.com/ZeroHawkeye/PenBridge",
+  "homepage": "https://github.com/zerx-lab/PenBridge",
   "author": {
     "name": "PenBridge Team",
     "email": "penbridge@users.noreply.github.com"

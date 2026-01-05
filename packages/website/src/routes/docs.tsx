@@ -228,7 +228,7 @@ function DocsPage() {
               {/* GitHub 链接 */}
               <div className="mt-8 pt-6 border-t border-border">
                 <a
-                  href="https://github.com/ZeroHawkeye/PenBridge/tree/main/packages/website/src/content/docs"
+                  href="https://github.com/zerx-lab/PenBridge/tree/main/packages/website/src/content/docs"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"

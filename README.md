@@ -9,26 +9,26 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZeroHawkeye/PenBridge">
+  <a href="https://github.com/zerx-lab/PenBridge">
     <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   </a>
-  <a href="https://github.com/ZeroHawkeye/PenBridge">
+  <a href="https://github.com/zerx-lab/PenBridge">
     <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React">
   </a>
-  <a href="https://github.com/ZeroHawkeye/PenBridge">
+  <a href="https://github.com/zerx-lab/PenBridge">
     <img src="https://img.shields.io/badge/Electron-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9" alt="Electron">
   </a>
-  <a href="https://github.com/ZeroHawkeye/PenBridge">
+  <a href="https://github.com/zerx-lab/PenBridge">
     <img src="https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white" alt="Bun">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZeroHawkeye/PenBridge/blob/main/LICENSE">
+  <a href="https://github.com/zerx-lab/PenBridge/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg" alt="License">
   </a>
-  <a href="https://github.com/ZeroHawkeye/PenBridge/stargazers">
-    <img src="https://img.shields.io/github/stars/ZeroHawkeye/PenBridge?style=social" alt="Stars">
+  <a href="https://github.com/zerx-lab/PenBridge/stargazers">
+    <img src="https://img.shields.io/github/stars/zerx-lab/PenBridge?style=social" alt="Stars">
   </a>
 </p>
 
@@ -110,7 +110,7 @@
 
 ```bash
 # 下载配置文件
-curl -O https://raw.githubusercontent.com/ZeroHawkeye/PenBridge/main/packages/server/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/zerx-lab/PenBridge/main/packages/server/docker-compose.prod.yml
 
 # 启动服务
 docker compose -f docker-compose.prod.yml up -d
@@ -126,7 +126,7 @@ docker run --rm -v pen-bridge-data:/data -v $(pwd):/backup alpine tar czf /backu
 ### 方式二：Electron 客户端
 
 1. 部署后端服务（Docker 或源码方式）
-2. 下载 [Electron 客户端](https://github.com/ZeroHawkeye/PenBridge/releases)
+2. 下载 [Electron 客户端](https://github.com/zerx-lab/PenBridge/releases)
 3. 配置后端地址（如 `http://localhost:3000`）
 
 > Electron 优势：支持弹窗登录，无需手动复制 Cookie
@@ -134,7 +134,7 @@ docker run --rm -v pen-bridge-data:/data -v $(pwd):/backup alpine tar czf /backu
 ### 方式三：源码开发
 
 ```bash
-git clone https://github.com/ZeroHawkeye/PenBridge.git
+git clone https://github.com/zerx-lab/PenBridge.git
 cd PenBridge
 bun install
 
@@ -255,7 +255,7 @@ sudo xattr -rd com.apple.quarantine /Applications/PenBridge.app
 
 ## 贡献
 
-欢迎提交 [Issue](https://github.com/ZeroHawkeye/PenBridge/issues) 和 Pull Request！
+欢迎提交 [Issue](https://github.com/zerx-lab/PenBridge/issues) 和 Pull Request！
 
 <p align="center">
   如果有帮助，欢迎 Star 支持

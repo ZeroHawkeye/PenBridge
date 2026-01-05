@@ -83,7 +83,7 @@ const statusConfig = {
 };
 
 // GitHub Discussions URL
-const DISCUSSIONS_URL = "https://github.com/ZeroHawkeye/PenBridge/discussions";
+const DISCUSSIONS_URL = "https://github.com/zerx-lab/PenBridge/discussions";
 
 function SurveyPage() {
   const [features, setFeatures] = useState<Feature[]>([]);
