@@ -228,7 +228,7 @@ function HeroSection() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <a
-              href="https://github.com/ZeroHawkeye/PenBridge/releases"
+              href="https://github.com/zerx-lab/PenBridge/releases"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-lg hover:bg-primary/90 transition-all hover:scale-105 shadow-lg shadow-primary/25"
@@ -540,7 +540,7 @@ function CTASection() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
-              href="https://github.com/ZeroHawkeye/PenBridge/releases"
+              href="https://github.com/zerx-lab/PenBridge/releases"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-lg hover:bg-primary/90 transition-all hover:scale-105 shadow-lg shadow-primary/25"
@@ -549,7 +549,7 @@ function CTASection() {
               立即下载
             </a>
             <a
-              href="https://github.com/ZeroHawkeye/PenBridge"
+              href="https://github.com/zerx-lab/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-border bg-background/50 font-semibold text-lg hover:bg-accent transition-all"

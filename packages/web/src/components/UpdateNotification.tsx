@@ -11,7 +11,7 @@ const isElectron = () => {
 };
 
 // GitHub Release 页面地址
-const GITHUB_RELEASES_URL = "https://github.com/ZeroHawkeye/PenBridge/releases";
+const GITHUB_RELEASES_URL = "https://github.com/zerx-lab/PenBridge/releases";
 
 // 更新通知组件
 export function UpdateNotification() {

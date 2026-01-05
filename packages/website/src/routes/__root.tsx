@@ -185,7 +185,7 @@ function Header() {
               <ThemeIcon theme={theme} resolvedTheme={resolvedTheme} />
             </button>
             <a
-              href="https://github.com/ZeroHawkeye/PenBridge"
+              href="https://github.com/zerx-lab/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 rounded-lg hover:bg-accent transition-colors hidden sm:flex"
@@ -239,7 +239,7 @@ function Header() {
               )
             )}
             <a
-              href="https://github.com/ZeroHawkeye/PenBridge"
+              href="https://github.com/zerx-lab/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-2"
@@ -287,7 +287,7 @@ function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <a
-                  href="https://github.com/ZeroHawkeye/PenBridge"
+                  href="https://github.com/zerx-lab/PenBridge"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -297,7 +297,7 @@ function Footer() {
               </li>
               <li>
                 <a
-                  href="https://github.com/ZeroHawkeye/PenBridge/releases"
+                  href="https://github.com/zerx-lab/PenBridge/releases"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -307,7 +307,7 @@ function Footer() {
               </li>
               <li>
                 <a
-                  href="https://github.com/ZeroHawkeye/PenBridge/issues"
+                  href="https://github.com/zerx-lab/PenBridge/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -325,7 +325,7 @@ function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <a
-              href="https://github.com/ZeroHawkeye/PenBridge"
+              href="https://github.com/zerx-lab/PenBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-foreground transition-colors"
