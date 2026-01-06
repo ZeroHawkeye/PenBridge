@@ -22,7 +22,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const GITHUB_API = "https://api.github.com/graphql";
-const REPO_OWNER = "ZeroHawkeye";
+const REPO_OWNER = "zerx-lab";
 const REPO_NAME = "PenBridge";
 
 // 默认值配置

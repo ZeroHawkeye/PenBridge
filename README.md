@@ -262,5 +262,5 @@ sudo xattr -rd com.apple.quarantine /Applications/PenBridge.app
 </p>
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/ZeroHawkeye">ZeroHawkeye</a>
+  Made with ❤️ by <a href="https://github.com/zerx-lab">zerx-lab</a>
 </p>

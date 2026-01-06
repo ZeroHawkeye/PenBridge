@@ -105,7 +105,13 @@ mac:
   # 统一 macOS 安装包命名格式，包含平台标识 mac
   artifactName: "${productName}-${version}-mac-${arch}.${ext}"
   target:
+    # DMG 用于手动下载安装
     - target: dmg
+      arch:
+        - x64
+        - arm64
+    # ZIP 用于 electron-updater 自动更新（macOS 自动更新必须使用 ZIP 格式）
+    - target: zip
       arch:
         - x64
         - arm64
@@ -129,7 +135,7 @@ linux:
 # 发布配置 - 用于自动更新
 publish:
   provider: github
-  owner: ZeroHawkeye
+  owner: zerx-lab
   repo: PenBridge
   # 发布到 GitHub Releases
   releaseType: release
