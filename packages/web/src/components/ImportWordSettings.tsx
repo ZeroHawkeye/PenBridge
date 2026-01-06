@@ -38,11 +38,21 @@ export function ImportWordSettings({ onImport, onClose, articleId, onCreateArtic
         console.log(`临时文章已创建，ID: ${finalArticleId}`);
       }
       
-      // 转换 Word 文档，并上传图片（如果有 articleId）
+      // 转换 Word 文档，并批量上传图片（如果有 articleId）
+      console.log(`[导入 Word] 开始转换文档: ${file.name}`);
       const result = await convertWordToMarkdown(file, finalArticleId);
+      console.log(`[导入 Word] 文档转换完成，内容长度: ${result.markdown.length} 字符`);
+      
+      // 检查是否还有未处理的 base64 图片
+      const base64Count = (result.markdown.match(/data:image\//g) || []).length;
+      if (base64Count > 0) {
+        console.warn(`[导入 Word] 警告：还有 ${base64Count} 张 base64 图片未上传`);
+      }
       
       // 等待 onImport 完成（支持异步保存）
+      console.log(`[导入 Word] 开始导入内容...`);
       await onImport(result.title, result.markdown);
+      console.log(`[导入 Word] 内容导入完成`);
       message.success(`已导入并保存: ${result.fileName}`);
       // 导入成功后关闭设置面板
       onClose?.();

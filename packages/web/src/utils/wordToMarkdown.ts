@@ -124,55 +124,43 @@ export interface ConvertResult {
 }
 
 /**
- * 将 base64 图片上传到服务器
- * @param base64Data - base64 数据（格式：data:image/png;base64,xxxxx）
+ * 批量上传 Markdown 中的 base64 图片到服务器
+ * @param markdown - 包含 base64 图片的 Markdown 内容
  * @param articleId - 文章 ID
- * @returns 完整的图片 URL（如 http://localhost:36925/uploads/27/xxx.png）
+ * @returns 处理后的 Markdown（base64 替换为完整 URL，用于编辑器显示）
  */
-async function uploadBase64Image(base64Data: string, articleId: number): Promise<string> {
+async function batchUploadBase64Images(markdown: string, articleId: number): Promise<string> {
   const apiBaseUrl = getServerBaseUrlSync();
   if (!apiBaseUrl) {
     throw new Error("服务器未配置");
   }
 
-  // 提取 MIME 类型和数据
-  const matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
-  if (!matches) {
-    throw new Error("无效的 base64 数据");
-  }
-  
-  const mimeType = matches[1];
-  const data = matches[2];
-  
-  // 解码 base64
-  const binaryString = atob(data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  
-  // 创建 File 对象
-  const ext = mimeType.split("/")[1] || "png";
-  const file = new File([bytes], `word-image-${Date.now()}.${ext}`, { type: mimeType });
-
-  // 上传到服务器
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await fetch(`${apiBaseUrl}/api/upload/${articleId}`, {
+  // 调用批量上传 API
+  const response = await fetch(`${apiBaseUrl}/api/upload/batch/${articleId}`, {
     method: "POST",
-    body: formData,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ markdown }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || "图片上传失败");
+    throw new Error(error.error || "批量上传图片失败");
   }
 
   const result = await response.json();
-  // 返回完整 URL（拼接服务器地址）
-  // result.url 是相对路径（如 /uploads/27/xxx.png）
-  return `${apiBaseUrl}${result.url}`;
+  console.log(`[Word 导入] ${result.message}`);
+  
+  // 后端返回的是相对路径（/uploads/...），需要转换为完整 URL 供编辑器显示
+  const processedMarkdown = result.markdown.replace(
+    /!\[([^\]]*)\]\((\/uploads\/[^)]+)\)/g,
+    (_match: string, alt: string, relativeUrl: string) => {
+      return `![${alt}](${apiBaseUrl}${relativeUrl})`;
+    }
+  );
+  
+  return processedMarkdown;
 }
 
 /**
@@ -229,11 +217,11 @@ export async function convertWordToMarkdown(
   // 转换为 Markdown（异步）
   let md = await htmlToMd(html);
 
-  // 如果提供了 articleId，将 base64 图片上传到服务器
+  // 如果提供了 articleId，批量上传 base64 图片到服务器
   if (articleId !== undefined) {
-    console.log("开始处理 Word 中的图片...");
-    md = await processBase64ImagesInMarkdown(md, articleId);
-    console.log("图片处理完成");
+    console.log("开始批量上传 Word 中的图片...");
+    md = await batchUploadBase64Images(md, articleId);
+    console.log("图片批量上传完成");
   }
 
   // 清理 Markdown
@@ -249,54 +237,4 @@ export async function convertWordToMarkdown(
   };
 }
 
-/**
- * 处理 Markdown 中的 base64 图片，上传到服务器并替换为完整 URL
- * @param markdown - 包含 base64 图片的 Markdown 内容
- * @param articleId - 文章 ID
- * @returns 处理后的 Markdown（base64 替换为完整 URL，用于编辑器显示）
- */
-async function processBase64ImagesInMarkdown(
-  markdown: string,
-  articleId: number
-): Promise<string> {
-  // 匹配 markdown 中的 base64 图片: ![alt](data:image/...)
-  const base64ImageRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
-  
-  const matches: { fullMatch: string; alt: string; base64: string }[] = [];
-  let match;
-  while ((match = base64ImageRegex.exec(markdown)) !== null) {
-    matches.push({
-      fullMatch: match[0],
-      alt: match[1],
-      base64: match[2],
-    });
-  }
 
-  if (matches.length === 0) {
-    return markdown;
-  }
-
-  console.log(`发现 ${matches.length} 张 base64 图片需要上传`);
-
-  let result = markdown;
-  let uploadedCount = 0;
-  
-  for (const { fullMatch, alt, base64 } of matches) {
-    try {
-      // 上传图片到服务器，获取完整 URL
-      const fullUrl = await uploadBase64Image(base64, articleId);
-      console.log(`图片上传成功: ${fullUrl}`);
-      
-      // 替换为完整 URL（用于编辑器显示，保存时会自动转换为相对路径）
-      const newImageMarkdown = `![${alt}](${fullUrl})`;
-      result = result.replace(fullMatch, newImageMarkdown);
-      uploadedCount++;
-    } catch (error) {
-      console.error("上传图片失败:", error);
-      // 上传失败时保持 base64 格式
-    }
-  }
-
-  console.log(`成功上传 ${uploadedCount}/${matches.length} 张图片`);
-  return result;
-}
