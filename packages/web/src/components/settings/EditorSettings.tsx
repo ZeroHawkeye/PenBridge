@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Type, RotateCcw, PenLine, XCircle, Loader2 } from "lucide-react";
+import { Type, RotateCcw, PenLine, XCircle, Loader2, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,10 +29,22 @@ import {
   DEFAULT_FONT_FAMILY,
 } from "@/utils/fontSettings";
 
+// 行号设置存储
+const LINE_NUMBERS_KEY = "editor-show-line-numbers";
+
+export function isLineNumbersEnabled(): boolean {
+  return localStorage.getItem(LINE_NUMBERS_KEY) === "true";
+}
+
+export function setLineNumbersEnabled(enabled: boolean): void {
+  localStorage.setItem(LINE_NUMBERS_KEY, enabled ? "true" : "false");
+}
+
 // 编辑器设置组件
 export function EditorSettings() {
   const [spellCheckEnabled, setSpellCheckEnabledState] = useState(() => isSpellCheckEnabled());
   const [customWords, setCustomWords] = useState<string[]>(() => getCustomDictionary());
+  const [lineNumbersEnabled, setLineNumbersEnabledState] = useState(() => isLineNumbersEnabled());
   
   // 字体设置状态
   const [currentFont, setCurrentFont] = useState(() => getSavedFontFamily());
@@ -84,6 +96,16 @@ export function EditorSettings() {
     resetFontFamily();
     setCurrentFont(DEFAULT_FONT_FAMILY);
     message.success("已恢复默认字体");
+  };
+
+  const handleLineNumbersToggle = (checked: boolean) => {
+    setLineNumbersEnabled(checked);
+    setLineNumbersEnabledState(checked);
+    if (checked) {
+      message.success("行号显示已启用");
+    } else {
+      message.info("行号显示已关闭");
+    }
   };
 
   // 判断当前字体是否为预设字体
@@ -204,6 +226,25 @@ export function EditorSettings() {
             </Button>
           </div>
         </CardContent>
+      </Card>
+
+      {/* 行号显示开关 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Hash className="h-4 w-4" />
+              显示行号
+            </span>
+            <Switch
+              checked={lineNumbersEnabled}
+              onCheckedChange={handleLineNumbersToggle}
+            />
+          </CardTitle>
+          <CardDescription>
+            在编辑器左侧显示行号，方便定位和引用代码位置
+          </CardDescription>
+        </CardHeader>
       </Card>
 
       {/* 拼写检查开关 */}

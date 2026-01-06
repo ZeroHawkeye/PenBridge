@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/utils/trpc";
 import ArticleEditorLayout from "@/components/ArticleEditorLayout";
 import ImportWordSettings from "@/components/ImportWordSettings";
-import { convertToRelativeUrls } from "@/components/MilkdownEditor";
+import { convertToRelativeUrls } from "@/utils/markdownImageUtils";
 
 function NewArticlePage() {
   const navigate = useNavigate();

@@ -28,8 +28,15 @@ export const folderRouter = t.router({
         "updatedAt",
         "scheduledAt",
         "publishedAt",
+        // 腾讯云发布状态
         "tencentArticleId",
         "tencentArticleUrl",
+        // 掘金发布状态
+        "juejinArticleId",
+        "juejinArticleUrl",
+        // CSDN 发布状态
+        "csdnArticleId",
+        "csdnArticleUrl",
       ],
       order: { order: "ASC", createdAt: "DESC" },
     });

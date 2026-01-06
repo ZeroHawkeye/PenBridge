@@ -1,16 +1,16 @@
 // 编辑器类型定义
-export type EditorType = "milkdown" | "codemirror";
+export type EditorType = "livepreview" | "codemirror";
 
 // 编辑器显示名称
 export const EDITOR_LABELS: Record<EditorType, string> = {
-  milkdown: "所见即所得",
+  livepreview: "实时预览",
   codemirror: "源码模式",
 };
 
 // 编辑器描述
 export const EDITOR_DESCRIPTIONS: Record<EditorType, string> = {
-  milkdown: "实时渲染 Markdown，类似 Typora",
-  codemirror: "直接编辑 Markdown 源码，支持语法高亮",
+  livepreview: "实时渲染 Markdown，类似 Obsidian Live Preview",
+  codemirror: "直接编辑 Markdown 源码，显示原始语法",
 };
 
 // 通用编辑器接口 - 所有编辑器都必须实现这个接口
@@ -40,10 +40,14 @@ export const EDITOR_PREFERENCE_KEY = "editor-type-preference";
 // 获取保存的编辑器偏好
 export function getEditorPreference(): EditorType {
   const saved = localStorage.getItem(EDITOR_PREFERENCE_KEY);
-  if (saved === "milkdown" || saved === "codemirror") {
+  // 兼容旧的 milkdown 值，自动迁移到 livepreview
+  if (saved === "milkdown" || saved === "livepreview") {
+    return "livepreview";
+  }
+  if (saved === "codemirror") {
     return saved;
   }
-  return "milkdown"; // 默认使用 Milkdown
+  return "livepreview"; // 默认使用实时预览
 }
 
 // 保存编辑器偏好

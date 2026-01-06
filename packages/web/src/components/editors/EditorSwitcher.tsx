@@ -1,5 +1,5 @@
 // 编辑器切换器 - 同时保留两个编辑器实例，通过 CSS 切换可见性
-// 避免切换时销毁/重建编辑器导致的严重卡顿（之前需要 2.4 秒）
+// 使用 CodeMirror 实现两种模式：实时预览（Live Preview）和源码模式
 import {
   forwardRef,
   lazy,
@@ -10,7 +10,7 @@ import {
   useRef,
   useEffect,
 } from "react";
-import { Code, FileText, ChevronDown, Check } from "lucide-react";
+import { Code, Eye, ChevronDown, Check } from "lucide-react";
 import { Dropdown, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import { Button } from "@/components/ui/button";
@@ -23,14 +23,13 @@ import {
 } from "./types";
 
 // 懒加载编辑器组件
-const MilkdownEditorWrapper = lazy(() => import("./MilkdownEditorWrapper"));
+const LivePreviewEditor = lazy(() => import("./LivePreviewEditor"));
 const CodeMirrorEditor = lazy(() => import("./CodeMirrorEditor"));
 
-// 编辑器加载中占位组件 - 优化骨架屏显示
+// 编辑器加载中占位组件
 function EditorLoading() {
   return (
     <div className="min-h-[400px] space-y-4 animate-pulse">
-      {/* 模拟编辑器内容的骨架屏 */}
       <div className="h-6 bg-muted rounded w-3/4" />
       <div className="h-4 bg-muted rounded w-full" />
       <div className="h-4 bg-muted rounded w-5/6" />
@@ -50,7 +49,7 @@ function EditorLoadingLight() {
 
 // 编辑器图标
 const EDITOR_ICONS: Record<EditorType, React.ReactNode> = {
-  milkdown: <FileText className="h-4 w-4" />,
+  livepreview: <Eye className="h-4 w-4" />,
   codemirror: <Code className="h-4 w-4" />,
 };
 
@@ -63,6 +62,8 @@ export interface EditorSwitcherProps extends BaseEditorProps {
   showSwitcher?: boolean;
   // 编辑器实例 key（用于强制重新渲染）
   editorKey?: number;
+  // 是否显示行号
+  showLineNumbers?: boolean;
 }
 
 export interface EditorSwitcherRef extends EditorRef {
@@ -78,6 +79,7 @@ function EditorSwitcherInner(
     onEditorTypeChange,
     showSwitcher = true,
     editorKey,
+    showLineNumbers = false,
     ...editorProps
   }: EditorSwitcherProps,
   ref: React.ForwardedRef<EditorSwitcherRef>
@@ -86,55 +88,54 @@ function EditorSwitcherInner(
   const [editorType, setEditorType] = useState<EditorType>(
     () => initialEditorType ?? getEditorPreference()
   );
-  
-  // 追踪哪些编辑器已经被初始化过（用于延迟加载非活动编辑器）
-  const [initializedEditors, setInitializedEditors] = useState<Set<EditorType>>(
-    () => new Set([initialEditorType ?? getEditorPreference()])
-  );
 
-  // 空闲时预加载另一个编辑器，提升切换体验
+  // 追踪哪些编辑器已经被初始化过（用于延迟加载非活动编辑器）
+  const [initializedEditors, setInitializedEditors] = useState<
+    Set<EditorType>
+  >(() => new Set([initialEditorType ?? getEditorPreference()]));
+
+  // 空闲时预加载另一个编辑器
   useEffect(() => {
     const preloadOtherEditor = () => {
-      if (editorType === "milkdown") {
-        // 预加载 CodeMirror
+      if (editorType === "livepreview") {
         import("./CodeMirrorEditor");
       } else {
-        // 预加载 Milkdown
-        import("./MilkdownEditorWrapper");
+        import("./LivePreviewEditor");
       }
     };
 
-    // 使用 requestIdleCallback 在浏览器空闲时预加载
     if (typeof requestIdleCallback !== "undefined") {
-      const idleId = requestIdleCallback(preloadOtherEditor, { timeout: 3000 });
+      const idleId = requestIdleCallback(preloadOtherEditor, {
+        timeout: 3000,
+      });
       return () => cancelIdleCallback(idleId);
     } else {
-      // 降级方案：使用 setTimeout
       const timerId = setTimeout(preloadOtherEditor, 2000);
       return () => clearTimeout(timerId);
     }
   }, [editorType]);
 
   // 两个编辑器的 ref
-  const milkdownRef = useRef<EditorRef>(null);
+  const livepreviewRef = useRef<EditorRef>(null);
   const codemirrorRef = useRef<EditorRef>(null);
-  
-  // 用于追踪是否正在同步内容（避免循环更新）
+
+  // 用于追踪是否正在同步内容
   const isSyncingRef = useRef(false);
 
   // 获取当前活动编辑器的 ref
   const getActiveEditorRef = useCallback(() => {
-    return editorType === "milkdown" ? milkdownRef : codemirrorRef;
+    return editorType === "livepreview" ? livepreviewRef : codemirrorRef;
   }, [editorType]);
 
-  // 处理编辑器切换 - 核心优化：不销毁编辑器，只切换可见性
+  // 处理编辑器切换
   const handleEditorTypeChange = useCallback(
     (type: EditorType) => {
       if (type === editorType) return;
 
       // 获取当前编辑器内容
       const currentRef = getActiveEditorRef();
-      const currentContent = currentRef.current?.getContent?.() ?? editorProps.value;
+      const currentContent =
+        currentRef.current?.getContent?.() ?? editorProps.value;
 
       // 保存偏好设置
       setEditorPreference(type);
@@ -142,45 +143,45 @@ function EditorSwitcherInner(
 
       // 如果目标编辑器还未初始化，先标记为需要初始化
       if (!initializedEditors.has(type)) {
-        setInitializedEditors(prev => new Set(prev).add(type));
+        setInitializedEditors((prev) => new Set(prev).add(type));
       }
 
       // 同步内容到目标编辑器
-      // Milkdown 编辑器是异步初始化的（RAF + crepe.create()），需要重试等待就绪
       const syncContent = (retryCount = 0) => {
-        const targetRef = type === "milkdown" ? milkdownRef : codemirrorRef;
+        const targetRef =
+          type === "livepreview" ? livepreviewRef : codemirrorRef;
         if (targetRef.current) {
           isSyncingRef.current = true;
           const success = targetRef.current.setContent(currentContent);
           isSyncingRef.current = false;
-          
-          // 如果设置失败且还有重试次数，继续重试
+
           if (!success && retryCount < 10) {
             setTimeout(() => syncContent(retryCount + 1), 100);
           }
         } else if (retryCount < 10) {
-          // 编辑器 ref 还未就绪，继续重试
           setTimeout(() => syncContent(retryCount + 1), 100);
         }
       };
-      
-      // 使用 requestAnimationFrame 确保在 DOM 更新后执行
+
       requestAnimationFrame(() => syncContent(0));
 
-      // 如果当前内容与 props.value 不同，触发 onChange 以同步状态
       if (currentContent !== editorProps.value) {
         editorProps.onChange?.(currentContent);
       }
 
-      // 立即切换编辑器类型（只是 CSS display 切换，瞬间完成）
       setEditorType(type);
     },
-    [editorType, editorProps, onEditorTypeChange, getActiveEditorRef, initializedEditors]
+    [
+      editorType,
+      editorProps,
+      onEditorTypeChange,
+      getActiveEditorRef,
+      initializedEditors,
+    ]
   );
 
-  // 当 editorKey 变化时（外部强制刷新），同步内容
+  // 当 editorKey 变化时同步内容
   useEffect(() => {
-    // editorKey 变化时重新同步两个编辑器的内容
     const activeRef = getActiveEditorRef();
     if (activeRef.current) {
       isSyncingRef.current = true;
@@ -211,21 +212,29 @@ function EditorSwitcherInner(
     [editorType, editorProps.value, handleEditorTypeChange, getActiveEditorRef]
   );
 
-  // 处理内容变化 - 只有活动编辑器的变化才触发 onChange
-  const handleMilkdownChange = useCallback((content: string) => {
-    if (editorType === "milkdown" && !isSyncingRef.current) {
-      editorProps.onChange?.(content);
-    }
-  }, [editorType, editorProps]);
+  // 处理内容变化
+  const handleLivePreviewChange = useCallback(
+    (content: string) => {
+      if (editorType === "livepreview" && !isSyncingRef.current) {
+        editorProps.onChange?.(content);
+      }
+    },
+    [editorType, editorProps]
+  );
 
-  const handleCodemirrorChange = useCallback((content: string) => {
-    if (editorType === "codemirror" && !isSyncingRef.current) {
-      editorProps.onChange?.(content);
-    }
-  }, [editorType, editorProps]);
+  const handleCodemirrorChange = useCallback(
+    (content: string) => {
+      if (editorType === "codemirror" && !isSyncingRef.current) {
+        editorProps.onChange?.(content);
+      }
+    },
+    [editorType, editorProps]
+  );
 
   // 构建 antd Dropdown 菜单项
-  const dropdownItems: MenuProps["items"] = (Object.keys(EDITOR_LABELS) as EditorType[]).map((type) => ({
+  const dropdownItems: MenuProps["items"] = (
+    Object.keys(EDITOR_LABELS) as EditorType[]
+  ).map((type) => ({
     key: type,
     label: (
       <div className="flex items-center gap-3 py-1">
@@ -244,7 +253,6 @@ function EditorSwitcherInner(
     onClick: () => handleEditorTypeChange(type),
   }));
 
-  // 渲染两个编辑器，通过 CSS display 切换可见性
   return (
     <div className="editor-switcher relative">
       {/* 编辑器切换按钮 */}
@@ -272,22 +280,27 @@ function EditorSwitcherInner(
         </div>
       )}
 
-      {/* Milkdown 编辑器 - 始终挂载（首次使用时），通过 display 控制可见性 */}
-      <div style={{ display: editorType === "milkdown" ? "block" : "none" }}>
-        {initializedEditors.has("milkdown") && (
+      {/* Live Preview 编辑器 */}
+      <div
+        style={{ display: editorType === "livepreview" ? "block" : "none" }}
+      >
+        {initializedEditors.has("livepreview") && (
           <Suspense fallback={<EditorLoading />}>
-            <MilkdownEditorWrapper
-              key={`milkdown-${editorKey ?? 0}`}
-              ref={milkdownRef}
+            <LivePreviewEditor
+              key={`livepreview-${editorKey ?? 0}`}
+              ref={livepreviewRef}
               {...editorProps}
-              onChange={handleMilkdownChange}
+              onChange={handleLivePreviewChange}
+              showLineNumbers={showLineNumbers}
             />
           </Suspense>
         )}
       </div>
 
-      {/* CodeMirror 编辑器 - 始终挂载（首次使用时），通过 display 控制可见性 */}
-      <div style={{ display: editorType === "codemirror" ? "block" : "none" }}>
+      {/* CodeMirror 源码编辑器 */}
+      <div
+        style={{ display: editorType === "codemirror" ? "block" : "none" }}
+      >
         {initializedEditors.has("codemirror") && (
           <Suspense fallback={<EditorLoadingLight />}>
             <CodeMirrorEditor
@@ -303,7 +316,6 @@ function EditorSwitcherInner(
   );
 }
 
-// 使用 forwardRef 暴露方法
 export const EditorSwitcher = forwardRef(EditorSwitcherInner);
 
 export default EditorSwitcher;

@@ -51,9 +51,16 @@ export const articleExtRouter = t.router({
     )
     .mutation(async ({ input }) => {
       const articleRepo = AppDataSource.getRepository(Article);
-      await articleRepo.update(input.id, {
-        folderId: input.folderId ?? undefined,
-      });
+      
+      // 使用 QueryBuilder 来正确处理 NULL 值
+      // 当 folderId 为 null/undefined 时，需要将数据库字段设置为 NULL
+      await articleRepo
+        .createQueryBuilder()
+        .update(Article)
+        .set({ folderId: input.folderId === null || input.folderId === undefined ? () => "NULL" : input.folderId })
+        .where("id = :id", { id: input.id })
+        .execute();
+      
       return articleRepo.findOne({ where: { id: input.id } });
     }),
 

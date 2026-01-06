@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { EditorSwitcher, type EditorSwitcherRef } from "@/components/editors";
+import { isLineNumbersEnabled } from "@/components/settings/EditorSettings";
 import { TableOfContents, HeadingItem } from "@/components/TableOfContents";
 import { EditorSearchBox } from "@/components/EditorSearchBox";
 import { EditorSkeleton } from "@/components/EditorSkeleton";
@@ -154,6 +155,9 @@ export function ArticleEditorLayout({
   // 搜索框状态
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [initialSearchText, setInitialSearchText] = useState("");
+  
+  // 行号显示状态（从设置中读取）
+  const [showLineNumbers] = useState(() => isLineNumbersEnabled());
 
   // 内部 ref，如果外部没有提供
   const internalTitleInputRef = useRef<HTMLInputElement>(null);
@@ -654,6 +658,7 @@ export function ArticleEditorLayout({
                 className="min-h-[calc(100vh-200px)]"
                 articleId={articleId}
                 showSwitcher={true}
+                showLineNumbers={showLineNumbers}
               />
             )}
           </div>

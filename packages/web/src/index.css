@@ -1472,6 +1472,33 @@ a .text-foreground,
   outline: none;
 }
 
+/* ==================== Live Preview 编辑器样式 ==================== */
+.live-preview-editor {
+  min-height: 400px;
+  width: 100%;
+}
+
+.live-preview-editor .cm-editor {
+  min-height: 400px;
+  background: transparent;
+  outline: none;
+  border: none;
+}
+
+.live-preview-editor .cm-editor.cm-focused {
+  outline: none;
+  border: none;
+}
+
+/* 移除 CodeMirror 默认的 focus 边框 */
+.live-preview-editor .cm-focused {
+  outline: none !important;
+}
+
+.live-preview-editor .cm-scroller {
+  outline: none;
+}
+
 /* 选中文字背景 - 确保可见 */
 .codemirror-editor .cm-selectionBackground {
   background-color: rgba(100, 150, 255, 0.3) !important;

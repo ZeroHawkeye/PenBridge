@@ -8,7 +8,7 @@ import { trpc } from "@/utils/trpc";
 import PublishMenu from "@/components/PublishMenu";
 import ArticleEditorLayout from "@/components/ArticleEditorLayout";
 import ImportWordSettings from "@/components/ImportWordSettings";
-import { replaceBase64ImagesInMarkdown, convertToAbsoluteUrls, convertToRelativeUrls } from "@/components/MilkdownEditor";
+import { replaceBase64ImagesInMarkdown, convertToAbsoluteUrls, convertToRelativeUrls } from "@/utils/markdownImageUtils";
 
 // 保存状态类型
 type SaveStatus = "idle" | "saving" | "saved";
