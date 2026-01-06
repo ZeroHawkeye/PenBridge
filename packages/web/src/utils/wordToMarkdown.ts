@@ -1,6 +1,8 @@
 // 延迟加载 mammoth 和 turndown 库（这些库体积较大，仅在实际导入 Word 时才需要）
 // 这样可以减少首屏加载时间约 600ms
 
+import { getServerBaseUrlSync } from "./serverConfig";
+
 // 默认 Turndown 配置
 const defaultTurndownOptions = {
   headingStyle: "atx" as const,
@@ -122,12 +124,66 @@ export interface ConvertResult {
 }
 
 /**
+ * 将 base64 图片上传到服务器
+ * @param base64Data - base64 数据（格式：data:image/png;base64,xxxxx）
+ * @param articleId - 文章 ID
+ * @returns 完整的图片 URL（如 http://localhost:36925/uploads/27/xxx.png）
+ */
+async function uploadBase64Image(base64Data: string, articleId: number): Promise<string> {
+  const apiBaseUrl = getServerBaseUrlSync();
+  if (!apiBaseUrl) {
+    throw new Error("服务器未配置");
+  }
+
+  // 提取 MIME 类型和数据
+  const matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+  if (!matches) {
+    throw new Error("无效的 base64 数据");
+  }
+  
+  const mimeType = matches[1];
+  const data = matches[2];
+  
+  // 解码 base64
+  const binaryString = atob(data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  // 创建 File 对象
+  const ext = mimeType.split("/")[1] || "png";
+  const file = new File([bytes], `word-image-${Date.now()}.${ext}`, { type: mimeType });
+
+  // 上传到服务器
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${apiBaseUrl}/api/upload/${articleId}`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "图片上传失败");
+  }
+
+  const result = await response.json();
+  // 返回完整 URL（拼接服务器地址）
+  // result.url 是相对路径（如 /uploads/27/xxx.png）
+  return `${apiBaseUrl}${result.url}`;
+}
+
+/**
  * 将 Word 文档 (.docx) 转换为 Markdown
  * @param file - Word 文件
+ * @param articleId - 文章 ID（可选，用于图片上传。如果不提供，图片将保持 base64 格式）
  * @returns 转换后的 Markdown 内容和文件信息
  */
 export async function convertWordToMarkdown(
-  file: File
+  file: File,
+  articleId?: number
 ): Promise<ConvertResult> {
   // 验证文件类型
   const fileName = file.name;
@@ -171,7 +227,14 @@ export async function convertWordToMarkdown(
   console.log("处理后 HTML:", html.substring(0, 500));
 
   // 转换为 Markdown（异步）
-  const md = await htmlToMd(html);
+  let md = await htmlToMd(html);
+
+  // 如果提供了 articleId，将 base64 图片上传到服务器
+  if (articleId !== undefined) {
+    console.log("开始处理 Word 中的图片...");
+    md = await processBase64ImagesInMarkdown(md, articleId);
+    console.log("图片处理完成");
+  }
 
   // 清理 Markdown
   const cleanedMd = cleanMarkdown(md);
@@ -184,4 +247,56 @@ export async function convertWordToMarkdown(
     fileName,
     title,
   };
+}
+
+/**
+ * 处理 Markdown 中的 base64 图片，上传到服务器并替换为完整 URL
+ * @param markdown - 包含 base64 图片的 Markdown 内容
+ * @param articleId - 文章 ID
+ * @returns 处理后的 Markdown（base64 替换为完整 URL，用于编辑器显示）
+ */
+async function processBase64ImagesInMarkdown(
+  markdown: string,
+  articleId: number
+): Promise<string> {
+  // 匹配 markdown 中的 base64 图片: ![alt](data:image/...)
+  const base64ImageRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
+  
+  const matches: { fullMatch: string; alt: string; base64: string }[] = [];
+  let match;
+  while ((match = base64ImageRegex.exec(markdown)) !== null) {
+    matches.push({
+      fullMatch: match[0],
+      alt: match[1],
+      base64: match[2],
+    });
+  }
+
+  if (matches.length === 0) {
+    return markdown;
+  }
+
+  console.log(`发现 ${matches.length} 张 base64 图片需要上传`);
+
+  let result = markdown;
+  let uploadedCount = 0;
+  
+  for (const { fullMatch, alt, base64 } of matches) {
+    try {
+      // 上传图片到服务器，获取完整 URL
+      const fullUrl = await uploadBase64Image(base64, articleId);
+      console.log(`图片上传成功: ${fullUrl}`);
+      
+      // 替换为完整 URL（用于编辑器显示，保存时会自动转换为相对路径）
+      const newImageMarkdown = `![${alt}](${fullUrl})`;
+      result = result.replace(fullMatch, newImageMarkdown);
+      uploadedCount++;
+    } catch (error) {
+      console.error("上传图片失败:", error);
+      // 上传失败时保持 base64 格式
+    }
+  }
+
+  console.log(`成功上传 ${uploadedCount}/${matches.length} 张图片`);
+  return result;
 }

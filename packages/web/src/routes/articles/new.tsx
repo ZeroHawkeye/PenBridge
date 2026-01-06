@@ -14,6 +14,7 @@ function NewArticlePage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState<string>("");
   const [editorKey, setEditorKey] = useState(0);
+  const [currentArticleId, setCurrentArticleId] = useState<number | undefined>(undefined);
 
   const createMutation = trpc.article.create.useMutation({
     onSuccess: (article: { id: number }) => {
@@ -29,6 +30,16 @@ function NewArticlePage() {
     },
     onError: (error: Error) => {
       message.error(`创建失败: ${error.message}`);
+    },
+  });
+
+  const updateMutation = trpc.article.update.useMutation({
+    onSuccess: () => {
+      // 更新成功后刷新文件树
+      trpcUtils.folder.tree.invalidate();
+    },
+    onError: (error: Error) => {
+      message.error(`更新失败: ${error.message}`);
     },
   });
 
@@ -49,12 +60,40 @@ function NewArticlePage() {
     });
   };
 
+  // 创建临时文章以获取 articleId（用于 Word 导入时上传图片）
+  const handleCreateArticleForImport = async (tempTitle: string): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      createMutation.mutate(
+        { title: tempTitle, content: "" },
+        {
+          onSuccess: (article: { id: number }) => {
+            setCurrentArticleId(article.id);
+            resolve(article.id);
+          },
+          onError: (error: Error) => {
+            reject(error);
+          },
+        }
+      );
+    });
+  };
+
   // 处理 Word 导入
-  const handleWordImport = (importedTitle: string, importedContent: string) => {
+  const handleWordImport = async (importedTitle: string, importedContent: string) => {
     setTitle(importedTitle);
     setContent(importedContent);
     // 强制编辑器重新渲染以加载新内容
     setEditorKey((prev) => prev + 1);
+    
+    // 如果已经创建了临时文章，更新其内容
+    if (currentArticleId) {
+      const finalContent = convertToRelativeUrls(importedContent);
+      updateMutation.mutate({
+        id: currentArticleId,
+        title: importedTitle,
+        content: finalContent,
+      });
+    }
   };
 
   return (
@@ -65,7 +104,15 @@ function NewArticlePage() {
       onContentChange={setContent}
       breadcrumbLabel="新建"
       editorKey={editorKey}
-      settingsContent={({ onClose }) => <ImportWordSettings onImport={handleWordImport} onClose={onClose} />}
+      articleId={currentArticleId}
+      settingsContent={({ onClose }) => (
+        <ImportWordSettings
+          onImport={handleWordImport}
+          onClose={onClose}
+          articleId={currentArticleId}
+          onCreateArticle={handleCreateArticleForImport}
+        />
+      )}
       actionButtons={
         <Button
           size="sm"

@@ -359,7 +359,13 @@ function EditArticlePage() {
       titleInputRef={titleInputRef}
       editorKey={editorKey}
       articleId={Number(id)}
-      settingsContent={({ onClose }) => <ImportWordSettings onImport={handleWordImport} onClose={onClose} />}
+      settingsContent={({ onClose }) => (
+        <ImportWordSettings
+          onImport={handleWordImport}
+          onClose={onClose}
+          articleId={Number(id)}
+        />
+      )}
       statusIndicator={
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-[70px]">
           {saveStatus === "saving" && (

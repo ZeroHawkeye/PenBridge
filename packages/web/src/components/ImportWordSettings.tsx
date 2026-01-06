@@ -6,13 +6,15 @@ import { convertWordToMarkdown } from "@/utils/wordToMarkdown";
 interface ImportWordSettingsProps {
   onImport: (title: string, content: string) => void | Promise<void>;
   onClose?: () => void;
+  articleId?: number; // 文章 ID，用于图片上传（新建文章时为 undefined）
+  onCreateArticle?: (title: string) => Promise<number>; // 创建文章的回调（仅在新建页面使用）
 }
 
 /**
  * 导入 Word 文档的设置面板组件
  * Notion 风格设计，用于在编辑器设置中显示导入功能
  */
-export function ImportWordSettings({ onImport, onClose }: ImportWordSettingsProps) {
+export function ImportWordSettings({ onImport, onClose, articleId, onCreateArticle }: ImportWordSettingsProps) {
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,7 +27,20 @@ export function ImportWordSettings({ onImport, onClose }: ImportWordSettingsProp
 
     setIsImporting(true);
     try {
-      const result = await convertWordToMarkdown(file);
+      let finalArticleId = articleId;
+      
+      // 如果是新建文章页面（没有 articleId），需要先创建临时文章
+      if (finalArticleId === undefined && onCreateArticle) {
+        // 从文件名提取标题
+        const tempTitle = file.name.replace(/\.(docx?|DOCX?)$/, "");
+        console.log("创建临时文章以获取 articleId...");
+        finalArticleId = await onCreateArticle(tempTitle);
+        console.log(`临时文章已创建，ID: ${finalArticleId}`);
+      }
+      
+      // 转换 Word 文档，并上传图片（如果有 articleId）
+      const result = await convertWordToMarkdown(file, finalArticleId);
+      
       // 等待 onImport 完成（支持异步保存）
       await onImport(result.title, result.markdown);
       message.success(`已导入并保存: ${result.fileName}`);
