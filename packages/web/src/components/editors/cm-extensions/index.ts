@@ -12,6 +12,7 @@ export { listExtension } from "./list";
 export { codeblockExtension } from "./codeblock";
 export { alignmentExtension } from "./alignment";
 export { horizontalRuleExtension } from "./horizontalRule";
+export { headingFoldExtension } from "./headingFold";
 
 // 工具函数
 export {
@@ -31,11 +32,15 @@ import { listExtension } from "./list";
 import { codeblockExtension } from "./codeblock";
 import { alignmentExtension } from "./alignment";
 import { horizontalRuleExtension } from "./horizontalRule";
+import { headingFoldExtension } from "./headingFold";
 
 /**
  * 获取所有实时渲染扩展
  */
 export function getLivePreviewExtensions(): Extension[] {
+  console.log("[getLivePreviewExtensions] 加载扩展");
+  const foldExt = headingFoldExtension();
+  console.log("[getLivePreviewExtensions] headingFoldExtension 返回:", foldExt);
   return [
     headingExtension(),
     emphasisExtension(),
@@ -46,5 +51,6 @@ export function getLivePreviewExtensions(): Extension[] {
     codeblockExtension(),
     alignmentExtension(),
     horizontalRuleExtension(),
+    foldExt,
   ];
 }

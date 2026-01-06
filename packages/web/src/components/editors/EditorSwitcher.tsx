@@ -71,6 +71,8 @@ export interface EditorSwitcherRef extends EditorRef {
   getEditorType: () => EditorType;
   // 切换编辑器类型
   switchEditorType: (type: EditorType) => void;
+  // 滚动到指定行号（1-based）
+  scrollToLine: (line: number) => void;
 }
 
 function EditorSwitcherInner(
@@ -205,6 +207,10 @@ function EditorSwitcherInner(
       focus: () => {
         const activeRef = getActiveEditorRef();
         activeRef.current?.focus?.();
+      },
+      scrollToLine: (line: number) => {
+        const activeRef = getActiveEditorRef();
+        activeRef.current?.scrollToLine?.(line);
       },
       getEditorType: () => editorType,
       switchEditorType: handleEditorTypeChange,

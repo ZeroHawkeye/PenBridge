@@ -33,7 +33,6 @@ import {
   syntaxHighlighting,
   defaultHighlightStyle,
   bracketMatching,
-  foldGutter,
   indentOnInput,
 } from "@codemirror/language";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
@@ -163,9 +162,6 @@ const baseEditorTheme = EditorView.theme({
     color: "hsl(var(--muted-foreground) / 0.5)",
     fontStyle: "italic",
   },
-  ".cm-foldGutter": {
-    width: "16px",
-  },
 });
 
 // 只读主题扩展
@@ -237,6 +233,17 @@ function LivePreviewEditorInner(
       },
       focus: () => {
         viewRef.current?.focus();
+      },
+      scrollToLine: (line: number) => {
+        const view = viewRef.current;
+        if (!view) return;
+
+        // line 是 1-based，CodeMirror 的 line 方法也是 1-based
+        const lineInfo = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
+        // 滚动到该行的开始位置
+        view.dispatch({
+          effects: EditorView.scrollIntoView(lineInfo.from, { y: "start" }),
+        });
       },
     }),
     [value]
@@ -336,7 +343,6 @@ function LivePreviewEditorInner(
       bracketMatching(),
       highlightSelectionMatches(),
       history(),
-      foldGutter(),
 
       // Markdown 语言支持
       markdown({

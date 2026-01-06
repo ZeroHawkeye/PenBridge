@@ -231,6 +231,17 @@ function CodeMirrorEditorInner(
       focus: () => {
         viewRef.current?.focus();
       },
+      scrollToLine: (line: number) => {
+        const view = viewRef.current;
+        if (!view) return;
+
+        // line 是 1-based，CodeMirror 的 line 方法也是 1-based
+        const lineInfo = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
+        // 滚动到该行的开始位置
+        view.dispatch({
+          effects: EditorView.scrollIntoView(lineInfo.from, { y: "start" }),
+        });
+      },
     }),
     [value]
   );

@@ -171,29 +171,81 @@ export function ArticleEditorLayout({
 
   // 处理标题点击，滚动到对应位置
   const handleHeadingClick = useCallback((heading: HeadingItem) => {
-    const container = editorContainerRef.current;
-    if (!container) return;
-
-    // 在编辑器中查找对应的标题元素
-    // Milkdown 编辑器会将标题渲染为 h1-h5 元素
-    const headingElements = container.querySelectorAll("h1, h2, h3, h4, h5");
+    // 从 content 中解析所有标题，找到目标标题的行号（1-based）
+    const lines = content.split("\n");
+    let targetLineNumber = -1;
+    const idCountMap = new Map<string, number>();
     
-    // 遍历找到匹配的标题
-    for (const el of headingElements) {
-      const text = el.textContent?.trim();
-      if (text === heading.text) {
-        // 滚动到标题位置，留出一些顶部边距
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const match = line.match(/^(#{1,5})\s+(.+)$/);
+      if (match) {
+        const text = match[2].trim();
+        const baseId = text
+          .toLowerCase()
+          .replace(/[^\w\u4e00-\u9fa5]+/g, "-")
+          .replace(/^-|-$/g, "");
         
-        // 高亮效果
-        el.classList.add("toc-highlight");
-        setTimeout(() => {
-          el.classList.remove("toc-highlight");
-        }, 2000);
-        break;
+        const count = idCountMap.get(baseId) || 0;
+        idCountMap.set(baseId, count + 1);
+        const id = count > 0 ? `${baseId}-${count}` : baseId;
+        
+        // 通过 id 精确匹配
+        if (id === heading.id) {
+          targetLineNumber = i + 1; // 转换为 1-based 行号
+          break;
+        }
       }
     }
-  }, []);
+
+    if (targetLineNumber === -1) return;
+
+    // 使用编辑器的 scrollToLine 方法滚动到目标行
+    const editor = milkdownEditorRef.current;
+    if (editor?.scrollToLine) {
+      editor.scrollToLine(targetLineNumber);
+      
+      // 添加高亮效果
+      const container = editorContainerRef.current;
+      if (container) {
+        // 延迟一点执行高亮，等待滚动完成
+        setTimeout(() => {
+          // 查找对应的 DOM 元素并添加高亮
+          const cmLines = container.querySelectorAll(".cm-line");
+          // CodeMirror 可能只渲染可视区域，所以需要查找正确的行
+          // 先尝试通过行号标签查找
+          const gutterElements = container.querySelectorAll(".cm-gutterElement");
+          for (const gutter of gutterElements) {
+            if (gutter.textContent?.trim() === String(targetLineNumber)) {
+              // 找到对应的行号，获取同一行的内容元素
+              const lineIndex = Array.from(gutterElements).indexOf(gutter);
+              if (cmLines[lineIndex]) {
+                cmLines[lineIndex].classList.add("toc-highlight");
+                setTimeout(() => {
+                  cmLines[lineIndex].classList.remove("toc-highlight");
+                }, 2000);
+              }
+              return;
+            }
+          }
+          
+          // 如果没有行号标签，尝试通过索引查找（Live Preview 模式可能隐藏行号）
+          // 由于 CodeMirror 虚拟滚动，滚动后目标行应该在可视区域内
+          // 查找包含标题文本的行
+          for (const lineEl of cmLines) {
+            const lineText = lineEl.textContent?.trim() || "";
+            if (lineText.includes(heading.text)) {
+              lineEl.classList.add("toc-highlight");
+              setTimeout(() => {
+                lineEl.classList.remove("toc-highlight");
+              }, 2000);
+              return;
+            }
+          }
+        }, 100);
+      }
+    }
+  }, [content]);
 
   // 保存偏好到 localStorage
   useEffect(() => {

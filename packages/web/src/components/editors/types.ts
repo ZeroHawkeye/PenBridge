@@ -21,6 +21,8 @@ export interface EditorRef {
   getContent?: () => string;
   // 聚焦编辑器
   focus?: () => void;
+  // 滚动到指定行号（1-based）
+  scrollToLine?: (line: number) => void;
 }
 
 // 编辑器通用 Props
