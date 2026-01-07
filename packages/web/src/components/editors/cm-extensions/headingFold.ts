@@ -1,22 +1,24 @@
 /**
  * 标题折叠扩展
  * 只允许标题行折叠其下属内容（到下一个同级或更高级标题为止）
+ * 
+ * 重构说明：
+ * - 移除 Gutter，改为在标题行内显示折叠按钮（由 heading.ts 处理）
+ * - 本模块只负责折叠状态管理和折叠内容装饰
  */
 
-import { Extension, RangeSetBuilder, StateField, StateEffect } from "@codemirror/state";
+import { Extension, StateField, StateEffect } from "@codemirror/state";
 import {
   EditorView,
   Decoration,
   DecorationSet,
   WidgetType,
-  gutter,
-  GutterMarker,
 } from "@codemirror/view";
 
 // 匹配标题行
 const headingRE = /^(#{1,6})\s/;
 
-interface HeadingInfo {
+export interface HeadingInfo {
   level: number;
   lineStart: number;
   lineEnd: number;
@@ -24,9 +26,9 @@ interface HeadingInfo {
   contentEnd: number;
 }
 
-// 折叠状态 Effect
-const foldHeadingEffect = StateEffect.define<{ from: number; to: number }>();
-const unfoldHeadingEffect = StateEffect.define<{ from: number; to: number }>();
+// 折叠状态 Effect - 导出供其他模块使用
+export const foldHeadingEffect = StateEffect.define<{ from: number; to: number }>();
+export const unfoldHeadingEffect = StateEffect.define<{ from: number; to: number }>();
 
 // 折叠状态 StateField
 interface FoldedRange {
@@ -34,7 +36,7 @@ interface FoldedRange {
   to: number;
 }
 
-const foldedRangesField = StateField.define<FoldedRange[]>({
+export const foldedRangesField = StateField.define<FoldedRange[]>({
   create() {
     return [];
   },
@@ -73,7 +75,7 @@ const foldedRangesField = StateField.define<FoldedRange[]>({
 /**
  * 获取文档中所有标题及其折叠范围
  */
-function getHeadingsWithRanges(view: EditorView): HeadingInfo[] {
+export function getHeadingsWithRanges(view: EditorView): HeadingInfo[] {
   const { doc } = view.state;
   const headings: HeadingInfo[] = [];
 
@@ -115,112 +117,10 @@ function getHeadingsWithRanges(view: EditorView): HeadingInfo[] {
 /**
  * 检查某个范围是否已折叠
  */
-function isRangeFolded(view: EditorView, from: number, to: number): boolean {
+export function isRangeFolded(view: EditorView, from: number, to: number): boolean {
   const foldedRanges = view.state.field(foldedRangesField);
   return foldedRanges.some((r) => r.from === from && r.to === to);
 }
-
-/**
- * 折叠箭头 GutterMarker
- */
-class FoldMarker extends GutterMarker {
-  constructor(
-    readonly isFolded: boolean,
-    readonly from: number,
-    readonly to: number
-  ) {
-    super();
-  }
-
-  eq(other: FoldMarker): boolean {
-    return (
-      other.isFolded === this.isFolded &&
-      other.from === this.from &&
-      other.to === this.to
-    );
-  }
-
-  toDOM(view: EditorView): Node {
-    const wrapper = document.createElement("div");
-    wrapper.className = `cm-heading-fold-marker ${this.isFolded ? "folded" : "expanded"}`;
-    wrapper.title = this.isFolded ? "展开" : "折叠";
-
-    // 使用 SVG 箭头图标
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("width", "14");
-    svg.setAttribute("height", "14");
-    svg.setAttribute("viewBox", "0 0 16 16");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "2");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
-
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    if (this.isFolded) {
-      // 向右箭头 (已折叠，点击展开)
-      path.setAttribute("d", "M6 4l4 4-4 4");
-    } else {
-      // 向下箭头 (已展开，点击折叠)
-      path.setAttribute("d", "M4 6l4 4 4-4");
-    }
-    svg.appendChild(path);
-    wrapper.appendChild(svg);
-
-    // 保存引用用于点击处理
-    const from = this.from;
-    const to = this.to;
-    const isFolded = this.isFolded;
-
-    wrapper.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (isFolded) {
-        // 展开
-        view.dispatch({
-          effects: unfoldHeadingEffect.of({ from, to }),
-        });
-      } else {
-        // 折叠
-        view.dispatch({
-          effects: foldHeadingEffect.of({ from, to }),
-        });
-      }
-    });
-
-    return wrapper;
-  }
-}
-
-/**
- * 标题折叠 Gutter
- */
-const headingFoldGutter = gutter({
-  class: "cm-heading-fold-gutter",
-  markers: (view) => {
-    const builder = new RangeSetBuilder<GutterMarker>();
-    const headings = getHeadingsWithRanges(view);
-
-    for (const heading of headings) {
-      // 只有当标题下有内容时才显示折叠按钮
-      if (heading.contentEnd > heading.contentStart) {
-        const isFolded = isRangeFolded(
-          view,
-          heading.contentStart,
-          heading.contentEnd
-        );
-        builder.add(
-          heading.lineStart,
-          heading.lineStart,
-          new FoldMarker(isFolded, heading.contentStart, heading.contentEnd)
-        );
-      }
-    }
-
-    return builder.finish();
-  },
-});
 
 /**
  * 构建折叠装饰
@@ -300,6 +200,11 @@ class FoldPlaceholderWidget extends WidgetType {
     );
   }
 
+  // 块级 widget，估算折叠占位符高度
+  get estimatedHeight(): number {
+    return 24; // 单行占位符高度
+  }
+
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement("span");
     span.className = "cm-heading-fold-placeholder-widget";
@@ -329,45 +234,6 @@ class FoldPlaceholderWidget extends WidgetType {
  * 标题折叠主题样式
  */
 const headingFoldTheme = EditorView.baseTheme({
-  // Gutter 容器
-  ".cm-heading-fold-gutter": {
-    width: "20px",
-  },
-
-  // 折叠标记容器 - 使用 div 以便更好控制对齐
-  ".cm-heading-fold-marker": {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "20px",
-    height: "100%",
-    cursor: "pointer",
-    color: "var(--muted-foreground, #888)",
-    transition: "all 0.15s ease",
-    opacity: "0.5",
-  },
-
-  ".cm-heading-fold-marker:hover": {
-    backgroundColor: "var(--muted, rgba(0,0,0,0.06))",
-    color: "var(--foreground, #333)",
-    opacity: "1",
-  },
-
-  ".cm-heading-fold-marker.folded": {
-    color: "var(--primary, #3b82f6)",
-    opacity: "0.7",
-  },
-
-  ".cm-heading-fold-marker.folded:hover": {
-    backgroundColor: "hsl(var(--primary) / 0.1)",
-    color: "var(--primary, #3b82f6)",
-    opacity: "1",
-  },
-
-  ".cm-heading-fold-marker svg": {
-    flexShrink: "0",
-  },
-
   // 折叠占位符 widget
   ".cm-heading-fold-placeholder-widget": {
     display: "inline-block",
@@ -390,12 +256,12 @@ const headingFoldTheme = EditorView.baseTheme({
 
 /**
  * 标题折叠扩展
- * 只允许标题折叠其下属内容
+ * 只负责折叠状态管理和折叠内容装饰
+ * 折叠按钮由 heading.ts 的 HeadingIndicatorWidget 处理
  */
 export function headingFoldExtension(): Extension {
   return [
     foldedRangesField,
-    headingFoldGutter,
     foldDecorationField,
     headingFoldTheme,
   ];

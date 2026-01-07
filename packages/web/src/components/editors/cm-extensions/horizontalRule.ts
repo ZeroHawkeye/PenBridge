@@ -94,6 +94,11 @@ class HorizontalRuleWidget extends WidgetType {
     return true;
   }
 
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
+  }
+
   toDOM() {
     const hr = document.createElement("div");
     hr.className = "cm-md-horizontal-rule";

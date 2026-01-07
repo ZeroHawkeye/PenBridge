@@ -119,12 +119,17 @@ const baseEditorTheme = EditorView.theme({
     fontSize: "16px",
     height: "100%",
   },
+  ".cm-scroller": {
+    scrollPaddingTop: "24px",
+    scrollPaddingBottom: "24px",
+  },
   ".cm-content": {
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    padding: "24px 0",
     minHeight: "calc(100vh - 200px)",
     caretColor: "auto",
+    paddingTop: "24px",
+    paddingBottom: "24px",
   },
   ".cm-line": {
     padding: "0 24px",
@@ -240,9 +245,22 @@ function LivePreviewEditorInner(
 
         // line 是 1-based，CodeMirror 的 line 方法也是 1-based
         const lineInfo = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
-        // 滚动到该行的开始位置
-        view.dispatch({
-          effects: EditorView.scrollIntoView(lineInfo.from, { y: "start" }),
+        
+        // 使用 lineBlockAt 获取行块的视觉高度信息
+        // 这个方法会正确处理被 Widget 替换的行
+        const block = view.lineBlockAt(lineInfo.from);
+        
+        // 获取编辑器滚动容器
+        const scrollDOM = view.scrollDOM;
+        
+        // 计算目标行相对于文档顶部的偏移
+        // block.top 是相对于 documentTop 的位置
+        const targetScrollTop = block.top - 20; // 留出一点上边距
+        
+        // 直接设置滚动位置
+        scrollDOM.scrollTo({
+          top: targetScrollTop,
+          behavior: "instant",
         });
       },
     }),

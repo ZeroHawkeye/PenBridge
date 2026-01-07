@@ -148,7 +148,12 @@ const alignmentDecorationPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
+        const prevDecoCount = this.decorations.size;
         this.recompute(update);
+        // 如果装饰数量变化，请求重新测量
+        if (this.decorations.size !== prevDecoCount) {
+          this.view.requestMeasure();
+        }
       }
     }
   },
@@ -167,6 +172,11 @@ class AlignmentStartWidget extends WidgetType {
 
   eq(other: AlignmentStartWidget) {
     return other.alignType === this.alignType;
+  }
+
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
   }
 
   toDOM() {
@@ -199,6 +209,11 @@ class AlignmentEndWidget extends WidgetType {
     return true;
   }
 
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
+  }
+
   toDOM() {
     const span = document.createElement("span");
     span.className = "cm-md-align-end-indicator";
@@ -225,26 +240,30 @@ const alignmentTheme = EditorView.baseTheme({
     display: "block",
     height: "0.25em",
   },
-  // 对齐内容样式
-  ".cm-md-align-content.cm-md-align-left": {
+  // 对齐内容样式 - 使用高优先级选择器确保覆盖其他样式
+  "&.cm-editor .cm-line.cm-md-align-content.cm-md-align-left": {
     textAlign: "left",
   },
-  ".cm-md-align-content.cm-md-align-right": {
+  "&.cm-editor .cm-line.cm-md-align-content.cm-md-align-right": {
     textAlign: "right",
   },
-  ".cm-md-align-content.cm-md-align-center": {
+  "&.cm-editor .cm-line.cm-md-align-content.cm-md-align-center": {
     textAlign: "center",
   },
-  ".cm-md-align-content.cm-md-align-justify": {
+  "&.cm-editor .cm-line.cm-md-align-content.cm-md-align-justify": {
     textAlign: "justify",
   },
+  // 对齐块内的代码块也要继承对齐
+  "&.cm-editor .cm-line.cm-md-align-content.cm-md-codeblock": {
+    textAlign: "inherit",
+  },
   // 对齐块边框指示
-  ".cm-md-align-start": {
+  ".cm-line.cm-md-align-start": {
     borderTop: "1px dashed var(--border, #e5e7eb)",
     paddingTop: "0.25em",
     marginTop: "0.5em",
   },
-  ".cm-md-align-end": {
+  ".cm-line.cm-md-align-end": {
     borderBottom: "1px dashed var(--border, #e5e7eb)",
     paddingBottom: "0.25em",
     marginBottom: "0.5em",

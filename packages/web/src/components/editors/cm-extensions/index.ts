@@ -13,6 +13,7 @@ export { codeblockExtension } from "./codeblock";
 export { alignmentExtension } from "./alignment";
 export { horizontalRuleExtension } from "./horizontalRule";
 export { headingFoldExtension } from "./headingFold";
+export { tableExtension } from "./table";
 
 // 工具函数
 export {
@@ -33,6 +34,7 @@ import { codeblockExtension } from "./codeblock";
 import { alignmentExtension } from "./alignment";
 import { horizontalRuleExtension } from "./horizontalRule";
 import { headingFoldExtension } from "./headingFold";
+import { tableExtension } from "./table";
 
 /**
  * 获取所有实时渲染扩展
@@ -51,6 +53,7 @@ export function getLivePreviewExtensions(): Extension[] {
     codeblockExtension(),
     alignmentExtension(),
     horizontalRuleExtension(),
+    tableExtension(),
     foldExt,
   ];
 }

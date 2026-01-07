@@ -175,14 +175,14 @@ export function TreeNodeItem({
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const height = rect.height;
-    
+
     // 对于文件夹，分三段：上1/4放前面，中间1/2放里面，下1/4放后面
     if (node.type === "folder" && !node.isVirtual && isValidDropTarget()) {
       if (y < height * 0.25) return "before";
       if (y > height * 0.75) return "after";
       return "into";
     }
-    
+
     // 对于文章或虚拟目录，只分上下两段
     return y < height * 0.5 ? "before" : "after";
   };
@@ -218,13 +218,13 @@ export function TreeNodeItem({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!draggedItem) return;
     // 不能拖到自己上
     if (draggedItem.type === node.type && draggedItem.id === node.id) return;
-    
+
     const position = calculateDropPosition(e);
-    
+
     if (position === "into") {
       // 拖入文件夹
       e.dataTransfer.dropEffect = "move";
@@ -251,12 +251,12 @@ export function TreeNodeItem({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    console.log('[TreeNodeItem] handleDrop', { 
-      draggedItem, 
-      node: { type: node.type, id: node.id, name: node.name, depth } 
+
+    console.log('[TreeNodeItem] handleDrop', {
+      draggedItem,
+      node: { type: node.type, id: node.id, name: node.name, depth }
     });
-    
+
     if (!draggedItem) {
       console.log('[TreeNodeItem] No draggedItem');
       return;
@@ -265,10 +265,10 @@ export function TreeNodeItem({
       console.log('[TreeNodeItem] Same node, skipping');
       return;
     }
-    
+
     const position = calculateDropPosition(e);
     console.log('[TreeNodeItem] Drop position', { position });
-    
+
     if (position === "into" && isValidDropTarget()) {
       // 拖入文件夹
       console.log('[TreeNodeItem] Calling onDrop with folder target');
@@ -294,7 +294,7 @@ export function TreeNodeItem({
       <div className="relative">
         {/* 排序指示器 - 上方 */}
         {showIndicatorBefore && (
-          <div 
+          <div
             className="absolute left-0 right-0 h-0.5 bg-primary z-10 pointer-events-none"
             style={{ top: -1, marginLeft: `${depth * 20 + 8}px` }}
           />
@@ -342,7 +342,7 @@ export function TreeNodeItem({
         </button>
         {/* 排序指示器 - 下方 */}
         {showIndicatorAfter && (
-          <div 
+          <div
             className="absolute left-0 right-0 h-0.5 bg-primary z-10 pointer-events-none"
             style={{ bottom: -1, marginLeft: `${depth * 20 + 8}px` }}
           />
@@ -437,7 +437,7 @@ export function TreeNodeItem({
         <div className="relative">
           {/* 排序指示器 - 上方 */}
           {showIndicatorBefore && (
-            <div 
+            <div
               className="absolute left-0 right-0 h-0.5 bg-primary z-10 pointer-events-none"
               style={{ top: -1, marginLeft: `${depth * 20 + 8}px` }}
             />
@@ -472,7 +472,7 @@ export function TreeNodeItem({
           </Link>
           {/* 排序指示器 - 下方 */}
           {showIndicatorAfter && (
-            <div 
+            <div
               className="absolute left-0 right-0 h-0.5 bg-primary z-10 pointer-events-none"
               style={{ bottom: -1, marginLeft: `${depth * 20 + 8}px` }}
             />

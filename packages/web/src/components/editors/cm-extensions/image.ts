@@ -46,7 +46,13 @@ const imageDecorationPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
+        const prevDecoCount = this.decorations.size;
         this.recompute(update);
+        
+        // 如果装饰数量变化（说明有图片语法被显示/隐藏），请求重新测量
+        if (this.decorations.size !== prevDecoCount) {
+          this.view.requestMeasure();
+        }
       }
     }
 
@@ -84,7 +90,7 @@ const imageDecorationPlugin = ViewPlugin.fromClass(
                 from: matchStart,
                 to: matchEnd,
               }),
-              inclusive: true,
+              inclusive: false,
             });
             decorations.push(deco.range(matchStart, matchEnd));
           }
@@ -98,27 +104,25 @@ const imageDecorationPlugin = ViewPlugin.fromClass(
   }
 );
 
-// 图片点击处理扩展 - 点击图片时将光标移动到图片语法位置
+// 图片点击处理扩展 - 点击图片或错误信息时将光标移动到图片语法位置
 const imageClickHandler = EditorView.domEventHandlers({
   click(event, view) {
     const target = event.target as HTMLElement;
     
-    // 检查是否点击了图片
-    if (target.classList.contains("cm-md-image")) {
+    // 检查是否点击了图片或错误信息
+    if (target.classList.contains("cm-md-image") || target.classList.contains("cm-md-image-error")) {
       const container = target.closest(".cm-md-image-container");
       if (!container) return false;
       
       // 从 data 属性获取图片位置
       const fromStr = container.getAttribute("data-from");
-      const toStr = container.getAttribute("data-to");
       
-      if (fromStr && toStr) {
+      if (fromStr) {
         const from = parseInt(fromStr, 10);
-        const to = parseInt(toStr, 10);
         
-        // 将光标移动到图片语法内部（这会触发装饰重新计算，显示源码）
+        // 将光标移动到图片语法开始位置（不全选，只定位光标）
         view.dispatch({
-          selection: { anchor: from, head: to },
+          selection: { anchor: from },
           scrollIntoView: true,
         });
         
@@ -159,6 +163,11 @@ class ImageWidget extends WidgetType {
       this.spec.from === other.spec.from &&
       this.spec.to === other.spec.to
     );
+  }
+
+  // 图片可能改变行高，但返回 -1 让 CodeMirror 重新测量
+  get estimatedHeight(): number {
+    return -1;
   }
 
   toDOM() {
@@ -227,5 +236,9 @@ const imageTheme = EditorView.baseTheme({
     color: "var(--destructive, #dc2626)",
     fontSize: "0.875em",
     fontStyle: "italic",
+    cursor: "pointer",
+    "&:hover": {
+      textDecoration: "underline",
+    },
   },
 });

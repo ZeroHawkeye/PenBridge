@@ -1,6 +1,7 @@
 /**
  * 链接渲染扩展
  * 将 [text](url) 渲染为可点击的链接
+ * 使用 mark 装饰而非 replace，避免选择区域偏移问题
  */
 
 import { Extension, Range } from "@codemirror/state";
@@ -10,7 +11,6 @@ import {
   EditorView,
   ViewPlugin,
   ViewUpdate,
-  WidgetType,
 } from "@codemirror/view";
 import { isCursorInside } from "./utils";
 
@@ -18,7 +18,7 @@ import { isCursorInside } from "./utils";
  * 链接渲染扩展
  */
 export function linkExtension(): Extension {
-  return [linkDecorationPlugin, linkTheme];
+  return [linkDecorationPlugin, linkClickHandler, linkTheme];
 }
 
 // 链接正则: [text](url) 或 [text](url "title")
@@ -68,21 +68,46 @@ const linkDecorationPlugin = ViewPlugin.fromClass(
         if (!iter.lineBreak) {
           const text = iter.value;
 
-          // Markdown 链接
+          // Markdown 链接 - 使用 mark 装饰
           linkRE.lastIndex = 0;
           let match;
           while ((match = linkRE.exec(text)) !== null) {
             const matchStart = pos + match.index;
             const matchEnd = matchStart + match[0].length;
 
+            // 光标在链接内时显示源码
             if (update && isCursorInside(update, matchStart, matchEnd)) {
               continue;
             }
 
-            const deco = Decoration.replace({
-              widget: new LinkWidget(match[1], match[2], match[3]),
-            });
-            decorations.push(deco.range(matchStart, matchEnd));
+            const linkText = match[1];
+            const url = match[2];
+            const title = match[3];
+
+            // 隐藏开头的 [
+            decorations.push(
+              Decoration.mark({
+                class: "cm-md-link-syntax-hidden",
+              }).range(matchStart, matchStart + 1)
+            );
+
+            // 链接文字部分 - 添加链接样式和 data 属性
+            decorations.push(
+              Decoration.mark({
+                class: "cm-md-link",
+                attributes: {
+                  "data-url": url,
+                  "data-title": title || "",
+                },
+              }).range(matchStart + 1, matchStart + 1 + linkText.length)
+            );
+
+            // 隐藏 ](url) 或 ](url "title") 部分
+            decorations.push(
+              Decoration.mark({
+                class: "cm-md-link-syntax-hidden",
+              }).range(matchStart + 1 + linkText.length, matchEnd)
+            );
           }
 
           // 自动链接
@@ -97,11 +122,43 @@ const linkDecorationPlugin = ViewPlugin.fromClass(
 
             // 提取 URL（可能被 <> 包裹）
             const url = match[1] || match[0];
-            
-            const deco = Decoration.replace({
-              widget: new LinkWidget(url, url),
-            });
-            decorations.push(deco.range(matchStart, matchEnd));
+            const hasAngleBrackets = match[0].startsWith("<");
+
+            if (hasAngleBrackets) {
+              // 隐藏 <
+              decorations.push(
+                Decoration.mark({
+                  class: "cm-md-link-syntax-hidden",
+                }).range(matchStart, matchStart + 1)
+              );
+
+              // URL 部分
+              decorations.push(
+                Decoration.mark({
+                  class: "cm-md-link cm-md-auto-link",
+                  attributes: {
+                    "data-url": url,
+                  },
+                }).range(matchStart + 1, matchEnd - 1)
+              );
+
+              // 隐藏 >
+              decorations.push(
+                Decoration.mark({
+                  class: "cm-md-link-syntax-hidden",
+                }).range(matchEnd - 1, matchEnd)
+              );
+            } else {
+              // 普通 URL，只添加样式
+              decorations.push(
+                Decoration.mark({
+                  class: "cm-md-link cm-md-auto-link",
+                  attributes: {
+                    "data-url": url,
+                  },
+                }).range(matchStart, matchEnd)
+              );
+            }
           }
         }
         pos += iter.value.length;
@@ -113,57 +170,25 @@ const linkDecorationPlugin = ViewPlugin.fromClass(
   }
 );
 
-/**
- * 链接 Widget
- */
-class LinkWidget extends WidgetType {
-  constructor(
-    readonly text: string,
-    readonly url: string,
-    readonly title?: string
-  ) {
-    super();
-  }
-
-  eq(other: LinkWidget) {
-    return (
-      other.text === this.text &&
-      other.url === this.url &&
-      other.title === this.title
-    );
-  }
-
-  toDOM() {
-    const link = document.createElement("a");
-    link.className = "cm-md-link";
-    link.textContent = this.text;
-    link.href = this.url;
-    if (this.title) {
-      link.title = this.title;
-    }
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
+// 链接点击处理
+const linkClickHandler = EditorView.domEventHandlers({
+  click(event, _view) {
+    const target = event.target as HTMLElement;
     
-    // 阻止编辑器获取焦点
-    link.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-    });
-    
-    // Ctrl/Cmd + Click 打开链接
-    link.addEventListener("click", (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        window.open(this.url, "_blank", "noopener,noreferrer");
+    // 检查是否点击了链接
+    if (target.classList.contains("cm-md-link")) {
+      const url = target.getAttribute("data-url");
+      if (url && (event.ctrlKey || event.metaKey)) {
+        // Ctrl/Cmd + Click 打开链接
+        window.open(url, "_blank", "noopener,noreferrer");
+        event.preventDefault();
+        return true;
       }
-      e.preventDefault();
-    });
-
-    return link;
-  }
-
-  ignoreEvent(): boolean {
+    }
+    
     return false;
-  }
-}
+  },
+});
 
 // 链接主题样式
 const linkTheme = EditorView.baseTheme({
@@ -176,5 +201,12 @@ const linkTheme = EditorView.baseTheme({
     "&:hover": {
       textDecorationThickness: "2px",
     },
+  },
+  // 隐藏语法标记
+  ".cm-md-link-syntax-hidden": {
+    fontSize: "0",
+    width: "0",
+    display: "inline-block",
+    overflow: "hidden",
   },
 });

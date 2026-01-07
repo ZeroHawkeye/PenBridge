@@ -156,6 +156,11 @@ class ListBulletWidget extends WidgetType {
     return true;
   }
 
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
+  }
+
   toDOM() {
     const span = document.createElement("span");
     span.className = "cm-md-list-bullet";
@@ -182,6 +187,11 @@ class TaskCheckboxWidget extends WidgetType {
 
   eq(other: TaskCheckboxWidget) {
     return other.checked === this.checked;
+  }
+
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
   }
 
   toDOM() {

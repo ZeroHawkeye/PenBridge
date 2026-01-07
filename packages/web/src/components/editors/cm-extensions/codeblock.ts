@@ -137,7 +137,12 @@ const codeblockDecorationPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
+        const prevDecoCount = this.decorations.size;
         this.recompute(update);
+        // 如果装饰数量变化，请求重新测量
+        if (this.decorations.size !== prevDecoCount) {
+          this.view.requestMeasure();
+        }
       }
     }
   },
@@ -158,6 +163,11 @@ class CodeBlockHeaderWidget extends WidgetType {
     return other.language === this.language;
   }
 
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
+  }
+
   toDOM() {
     const span = document.createElement("span");
     span.className = "cm-md-codeblock-header";
@@ -176,6 +186,11 @@ class CodeBlockHeaderWidget extends WidgetType {
 class CodeBlockFooterWidget extends WidgetType {
   eq() {
     return true;
+  }
+
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
   }
 
   toDOM() {
@@ -199,12 +214,12 @@ const codeblockTheme = EditorView.baseTheme({
   ".cm-md-codeblock-start": {
     borderTopLeftRadius: "6px",
     borderTopRightRadius: "6px",
-    paddingTop: "0.5em",
+    paddingTop: "0.25em",
   },
   ".cm-md-codeblock-end": {
     borderBottomLeftRadius: "6px",
     borderBottomRightRadius: "6px",
-    paddingBottom: "0.5em",
+    paddingBottom: "0.25em",
   },
   ".cm-md-codeblock-content": {
     paddingLeft: "1em",
@@ -217,10 +232,9 @@ const codeblockTheme = EditorView.baseTheme({
     backgroundColor: "var(--muted, rgba(0,0,0,0.08))",
     padding: "0.1em 0.5em",
     borderRadius: "3px",
-    marginBottom: "0.25em",
   },
   ".cm-md-codeblock-footer": {
     display: "block",
-    height: "0.25em",
+    height: "0",
   },
 });

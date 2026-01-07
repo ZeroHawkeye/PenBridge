@@ -186,6 +186,11 @@ class EmphasisWidget extends WidgetType {
     return other.type === this.type && other.content === this.content;
   }
 
+  // 内联 widget，不影响行高
+  get estimatedHeight(): number {
+    return -1;
+  }
+
   toDOM() {
     const span = document.createElement("span");
     span.textContent = this.content;
