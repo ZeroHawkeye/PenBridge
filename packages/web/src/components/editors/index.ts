@@ -2,5 +2,4 @@
 export * from "./types";
 export { EditorSwitcher, type EditorSwitcherProps, type EditorSwitcherRef } from "./EditorSwitcher";
 export { default as EditorSwitcherComponent } from "./EditorSwitcher";
-export { LivePreviewEditor, type LivePreviewEditorProps } from "./LivePreviewEditor";
-export { CodeMirrorEditor, type CodeMirrorEditorProps } from "./CodeMirrorEditor";
+export { VditorEditor, type VditorEditorProps } from "./VditorEditor";

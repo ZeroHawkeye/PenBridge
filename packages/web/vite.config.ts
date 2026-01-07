@@ -89,13 +89,9 @@ export default defineConfig({
           if (id.includes("@radix-ui/")) {
             return "radix-vendor";
           }
-          // Milkdown 编辑器
-          if (id.includes("@milkdown/")) {
-            return "mdeditor-vendor";
-          }
-          // CodeMirror 编辑器
-          if (id.includes("@codemirror/")) {
-            return "codemirror-vendor";
+          // Vditor 编辑器
+          if (id.includes("vditor")) {
+            return "vditor-vendor";
           }
           // lucide 图标
           if (id.includes("lucide-react")) {

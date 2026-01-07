@@ -207,291 +207,6 @@ a .text-foreground,
   color: var(--color-foreground) !important;
 }
 
-/* Milkdown 编辑器样式 - 类 Obsidian 无边框沉浸式 */
-.milkdown-editor {
-  min-height: 400px;
-  width: 100%;
-}
-
-.milkdown-editor .milkdown {
-  min-height: 400px;
-  border: none;
-  background: transparent;
-}
-
-/* 移除聚焦边框 */
-.milkdown-editor .milkdown:focus-within {
-  border: none;
-  box-shadow: none;
-}
-
-/* 编辑器内容区域样式 */
-.milkdown-editor .ProseMirror {
-  padding: 0;
-  outline: none;
-}
-
-/* 覆盖 Milkdown 默认的 editor padding */
-.milkdown-editor .ProseMirror.virtual-cursor-enabled.editor {
-  padding: 0;
-}
-
-.milkdown-editor .ProseMirror:focus {
-  outline: none;
-}
-
-/* ==================== Toolbar 工具栏美化 - 现代风格 ==================== */
-.milkdown .milkdown-toolbar {
-  background: var(--popover) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 10px !important;
-  box-shadow: 
-    0 4px 6px -1px rgb(0 0 0 / 0.08),
-    0 2px 4px -2px rgb(0 0 0 / 0.05),
-    0 0 0 1px rgb(0 0 0 / 0.03) !important;
-  padding: 4px !important;
-  gap: 2px !important;
-  backdrop-filter: blur(8px);
-}
-
-.milkdown .milkdown-toolbar .toolbar-item {
-  width: 28px !important;
-  height: 28px !important;
-  margin: 2px !important;
-  padding: 4px !important;
-  border-radius: 6px !important;
-  transition: all 0.15s ease !important;
-}
-
-.milkdown .milkdown-toolbar .toolbar-item:hover {
-  background: var(--accent) !important;
-}
-
-.milkdown .milkdown-toolbar .toolbar-item:active {
-  background: var(--accent) !important;
-  transform: scale(0.95);
-}
-
-.milkdown .milkdown-toolbar .toolbar-item svg {
-  width: 18px !important;
-  height: 18px !important;
-  color: var(--muted-foreground) !important;
-  fill: var(--muted-foreground) !important;
-  transition: color 0.15s ease !important;
-}
-
-.milkdown .milkdown-toolbar .toolbar-item:hover svg {
-  color: var(--foreground) !important;
-  fill: var(--foreground) !important;
-}
-
-.milkdown .milkdown-toolbar .toolbar-item.active svg {
-  color: oklch(0.55 0.2 250) !important;
-  fill: oklch(0.55 0.2 250) !important;
-}
-
-.milkdown .milkdown-toolbar .divider {
-  width: 1px !important;
-  height: 18px !important;
-  margin: 7px 4px !important;
-  background: var(--border) !important;
-}
-
-/* ==================== Slash Menu 斜杠菜单美化 - 紧凑双列布局 ==================== */
-.milkdown .milkdown-slash-menu {
-  background: var(--popover) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
-  box-shadow: 
-    0 10px 38px -10px rgb(0 0 0 / 0.15),
-    0 10px 20px -15px rgb(0 0 0 / 0.1) !important;
-  overflow: hidden !important;
-  width: 320px !important;
-  backdrop-filter: blur(12px);
-  animation: slash-menu-appear 0.15s ease-out;
-}
-
-@keyframes slash-menu-appear {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* 隐藏顶部 Tab 切换栏，让菜单更紧凑 */
-.milkdown .milkdown-slash-menu .tab-group {
-  display: none !important;
-}
-
-/* 菜单内容区域 */
-.milkdown .milkdown-slash-menu .menu-groups {
-  padding: 6px !important;
-  max-height: 380px !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-/* 分组标题样式 - 紧凑 */
-.milkdown .milkdown-slash-menu .menu-groups .menu-group h6 {
-  font-size: 11px !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  color: var(--muted-foreground) !important;
-  padding: 8px 8px 4px !important;
-  margin: 0 !important;
-  letter-spacing: 0 !important;
-}
-
-/* 菜单项列表 - 双列布局 */
-.milkdown .milkdown-slash-menu .menu-groups .menu-group ul {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 2px !important;
-  padding: 0 !important;
-}
-
-/* 菜单项样式 - 紧凑设计 */
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li {
-  min-width: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  padding: 6px 8px !important;
-  border-radius: 6px !important;
-  cursor: pointer !important;
-  transition: all 0.12s ease !important;
-}
-
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li:hover,
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li.hover {
-  background: var(--accent) !important;
-}
-
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li.active {
-  background: oklch(0.55 0.2 250 / 0.1) !important;
-}
-
-/* 图标样式 - 更小更精致 */
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li svg {
-  width: 16px !important;
-  height: 16px !important;
-  color: var(--muted-foreground) !important;
-  fill: var(--muted-foreground) !important;
-  flex-shrink: 0 !important;
-  transition: color 0.12s ease !important;
-}
-
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li:hover svg,
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li.hover svg {
-  color: var(--foreground) !important;
-  fill: var(--foreground) !important;
-}
-
-/* 文字样式 - 紧凑 */
-.milkdown .milkdown-slash-menu .menu-groups .menu-group li > span {
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  color: var(--foreground) !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  line-height: 1.4 !important;
-}
-
-/* 分组分割线 - 更淡 */
-.milkdown .milkdown-slash-menu .menu-groups .menu-group + .menu-group::before {
-  display: block !important;
-  content: '' !important;
-  height: 1px !important;
-  background: var(--border) !important;
-  margin: 6px 8px !important;
-  opacity: 0.6 !important;
-}
-
-/* ==================== Block Handle 块编辑手柄美化 ==================== */
-.milkdown .milkdown-block-handle {
-  gap: 1px !important;
-  transition: opacity 0.2s ease !important;
-}
-
-.milkdown .milkdown-block-handle .operation-item {
-  width: 24px !important;
-  height: 24px !important;
-  padding: 4px !important;
-  border-radius: 4px !important;
-  transition: all 0.15s ease !important;
-}
-
-.milkdown .milkdown-block-handle .operation-item svg {
-  width: 16px !important;
-  height: 16px !important;
-  color: var(--muted-foreground) !important;
-  fill: var(--muted-foreground) !important;
-}
-
-.milkdown .milkdown-block-handle .operation-item:hover {
-  background: var(--accent) !important;
-}
-
-.milkdown .milkdown-block-handle .operation-item:hover svg {
-  color: var(--foreground) !important;
-  fill: var(--foreground) !important;
-}
-
-.milkdown .milkdown-block-handle .operation-item.active {
-  background: oklch(0.55 0.2 250 / 0.15) !important;
-}
-
-.milkdown .milkdown-block-handle .operation-item.active svg {
-  color: oklch(0.55 0.2 250) !important;
-  fill: oklch(0.55 0.2 250) !important;
-}
-
-/* ==================== Link Tooltip 链接提示框美化 ==================== */
-.milkdown .milkdown-link-preview,
-.milkdown .milkdown-link-edit {
-  background: var(--popover) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 10px !important;
-  box-shadow: 
-    0 4px 12px -2px rgb(0 0 0 / 0.1),
-    0 2px 6px -1px rgb(0 0 0 / 0.05) !important;
-  padding: 8px 12px !important;
-  backdrop-filter: blur(8px);
-}
-
-/* 拼写检查 - 红色波浪线 */
-.spell-error {
-  text-decoration: underline wavy #ef4444;
-  text-decoration-skip-ink: none;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-/* 拼写建议菜单 */
-.spell-suggestion-menu {
-  animation: spell-menu-fade-in 0.15s ease;
-}
-
-@keyframes spell-menu-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.spell-menu-item {
-  transition: background-color 0.1s ease;
-}
-
 /* 目录点击标题高亮效果 */
 .toc-highlight {
   animation: toc-highlight-pulse 2s ease-out;
@@ -517,534 +232,6 @@ a .text-foreground,
   100% {
     background-color: transparent;
   }
-}
-
-/* ==================== 代码块美化 - Notion 风格 + VSCode Light 主题 ==================== */
-
-/* 代码块容器样式 - Notion 风格：简洁无边框 */
-.milkdown-editor .milkdown-code-block {
-  position: relative;
-  background-color: #f7f6f3;
-  border: none;
-  border-radius: 4px;
-  margin: 8px 0;
-  overflow: hidden;
-}
-
-/* 工具栏 - 始终显示，Notion 风格 */
-.milkdown-editor .milkdown-code-block .tools {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background-color: transparent;
-  border-bottom: none;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* 语言按钮 - Notion 风格：简洁文字 */
-.milkdown-editor .milkdown-code-block .language-button {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  font-weight: 400;
-  color: #9b9a97;
-  background-color: transparent;
-  border: none;
-  border-radius: 3px;
-  padding: 2px 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: flex !important;
-  align-items: center;
-  gap: 2px;
-}
-
-.milkdown-editor .milkdown-code-block .language-button:hover {
-  background-color: rgba(55, 53, 47, 0.08);
-  color: #37352f;
-}
-
-/* 语言选择器下拉图标 */
-.milkdown-editor .milkdown-code-block .language-button .expand-icon {
-  opacity: 0.5;
-}
-
-/* 工具按钮组 - 始终显示 */
-.milkdown-editor .milkdown-code-block .tools-button-group {
-  display: flex !important;
-  align-items: center;
-  gap: 4px;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* 复制按钮 - Notion 风格 */
-.milkdown-editor .milkdown-code-block .copy-button {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background-color: transparent;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  color: #9b9a97;
-  font-size: 12px;
-  font-weight: 400;
-  transition: all 0.15s ease;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-.milkdown-editor .milkdown-code-block .copy-button:hover {
-  background-color: rgba(55, 53, 47, 0.08);
-  color: #37352f;
-}
-
-/* 复制按钮图标 */
-.milkdown-editor .milkdown-code-block .copy-button .milkdown-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.milkdown-editor .milkdown-code-block .copy-button .milkdown-icon svg {
-  width: 14px;
-  height: 14px;
-  fill: currentColor;
-}
-
-/* 复制成功状态 */
-.milkdown-editor .milkdown-code-block .copy-button.copied,
-.milkdown-editor .milkdown-code-block .copy-button[data-copied="true"] {
-  background-color: rgba(46, 170, 79, 0.15) !important;
-  color: #2eaa4f !important;
-  transition: all 0.2s ease;
-}
-
-/* 复制成功时的图标变绿 */
-.milkdown-editor .milkdown-code-block .copy-button.copied .milkdown-icon svg path,
-.milkdown-editor .milkdown-code-block .copy-button[data-copied="true"] .milkdown-icon svg path {
-  fill: #2eaa4f;
-}
-
-/* CodeMirror 编辑器区域 */
-.milkdown-editor .cm-editor {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
-  font-size: 14px;
-  line-height: 1.5;
-  background-color: transparent !important;
-}
-
-/* CodeMirror 内容区域 - 去掉内部圆角 */
-.milkdown-editor .milkdown-code-block .codemirror-host {
-  background-color: transparent;
-}
-
-.milkdown-editor .cm-content {
-  padding: 0 12px 12px 12px !important;
-}
-
-.milkdown-editor .cm-line {
-  padding: 0 4px;
-  border-radius: 0 !important;
-}
-
-/* 行号样式 - Notion 风格 */
-.milkdown-editor .cm-gutters {
-  background-color: transparent !important;
-  border-right: none !important;
-  color: #9b9a97 !important;
-  padding-left: 8px;
-}
-
-/* 移除行号区域的边框 */
-.milkdown-editor .cm-gutter {
-  border: none !important;
-}
-
-.milkdown-editor .cm-lineNumbers .cm-gutterElement {
-  padding: 0 8px 0 4px;
-  min-width: 32px;
-  font-size: 12px;
-  text-align: right;
-}
-
-/* 激活行高亮 - Notion 风格：淡淡的高亮 */
-.milkdown-editor .cm-activeLine {
-  background-color: rgba(55, 53, 47, 0.04) !important;
-  border-radius: 0 !important;
-}
-
-.milkdown-editor .cm-activeLineGutter {
-  background-color: transparent !important;
-}
-
-/* 选中文本 */
-.milkdown-editor .cm-selectionBackground {
-  background-color: #add6ff !important;
-}
-
-.milkdown-editor .cm-focused .cm-selectionBackground {
-  background-color: #add6ff !important;
-}
-
-/* 光标 */
-.milkdown-editor .cm-cursor {
-  border-left-color: #000 !important;
-}
-
-/* ==================== VSCode Light 语法高亮主题 ==================== */
-
-/* 注释 - 绿色 */
-.milkdown-editor .cm-editor .tok-comment,
-.milkdown-editor .cm-editor .ͼc {
-  color: #008000 !important;
-  font-style: italic;
-}
-
-/* 关键字 - 蓝色 */
-.milkdown-editor .cm-editor .tok-keyword,
-.milkdown-editor .cm-editor .ͼd {
-  color: #0000ff !important;
-  font-weight: 500;
-}
-
-/* 字符串 - 棕红色 */
-.milkdown-editor .cm-editor .tok-string,
-.milkdown-editor .cm-editor .ͼ7 {
-  color: #a31515 !important;
-}
-
-/* 数字 - 深绿色 */
-.milkdown-editor .cm-editor .tok-number,
-.milkdown-editor .cm-editor .ͼe {
-  color: #098658 !important;
-}
-
-/* 变量名 - 深蓝色 */
-.milkdown-editor .cm-editor .tok-variableName,
-.milkdown-editor .cm-editor .ͼb {
-  color: #001080 !important;
-}
-
-/* 类型名 - 青绿色 */
-.milkdown-editor .cm-editor .tok-typeName,
-.milkdown-editor .cm-editor .ͼ14 {
-  color: #267f99 !important;
-}
-
-/* 函数名 - 暗黄色 */
-.milkdown-editor .cm-editor .tok-function,
-.milkdown-editor .cm-editor .tok-propertyName,
-.milkdown-editor .cm-editor .ͼf {
-  color: #795e26 !important;
-}
-
-/* 操作符 - 黑色 */
-.milkdown-editor .cm-editor .tok-operator,
-.milkdown-editor .cm-editor .ͼ8 {
-  color: #000000 !important;
-}
-
-/* 标点符号 - 深灰 */
-.milkdown-editor .cm-editor .tok-punctuation,
-.milkdown-editor .cm-editor .ͼ9 {
-  color: #393a34 !important;
-}
-
-/* 属性 - 红色 */
-.milkdown-editor .cm-editor .tok-attributeName {
-  color: #e50000 !important;
-}
-
-/* 标签名 - 蓝色 */
-.milkdown-editor .cm-editor .tok-tagName,
-.milkdown-editor .cm-editor .ͼ10 {
-  color: #800000 !important;
-}
-
-/* 定义 - 紫色 */
-.milkdown-editor .cm-editor .tok-definition,
-.milkdown-editor .cm-editor .ͼ11 {
-  color: #0070c1 !important;
-}
-
-/* 布尔值 - 蓝色 */
-.milkdown-editor .cm-editor .tok-bool,
-.milkdown-editor .cm-editor .ͼ12 {
-  color: #0000ff !important;
-}
-
-/* 正则表达式 - 红色 */
-.milkdown-editor .cm-editor .tok-regexp {
-  color: #811f3f !important;
-}
-
-/* 类名 - 青色 */
-.milkdown-editor .cm-editor .tok-className {
-  color: #267f99 !important;
-}
-
-/* 标签属性值 - 蓝色 */
-.milkdown-editor .cm-editor .tok-attributeValue {
-  color: #0000ff !important;
-}
-
-/* meta 信息 */
-.milkdown-editor .cm-editor .tok-meta {
-  color: #267f99 !important;
-}
-
-/* 自定义类 - 加强 tok 覆盖 */
-.milkdown-editor .cm-editor .ͼ1 { color: #393a34 !important; } /* 默认文本 */
-.milkdown-editor .cm-editor .ͼ2 { color: #393a34 !important; } /* 默认文本 */
-.milkdown-editor .cm-editor .ͼ3 { color: #0000ff !important; } /* 关键字 */
-.milkdown-editor .cm-editor .ͼ4 { color: #0000ff !important; } /* 关键字 */
-.milkdown-editor .cm-editor .ͼ5 { color: #267f99 !important; } /* 类型 */
-.milkdown-editor .cm-editor .ͼ6 { color: #267f99 !important; } /* 类型 */
-
-/* ==================== 暗色模式代码块样式 - Notion Dark 风格 ==================== */
-.dark .milkdown-editor .milkdown-code-block {
-  background-color: #2f2f2f;
-  border: none;
-}
-
-.dark .milkdown-editor .milkdown-code-block .tools {
-  background-color: transparent;
-  border-bottom: none;
-}
-
-.dark .milkdown-editor .milkdown-code-block .language-button {
-  color: rgba(255, 255, 255, 0.5);
-  background-color: transparent;
-}
-
-.dark .milkdown-editor .milkdown-code-block .language-button:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.dark .milkdown-editor .milkdown-code-block .copy-button {
-  background-color: transparent;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.dark .milkdown-editor .milkdown-code-block .copy-button:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.dark .milkdown-editor .milkdown-code-block .copy-button.copied,
-.dark .milkdown-editor .milkdown-code-block .copy-button[data-copied="true"] {
-  background-color: rgba(46, 170, 79, 0.2);
-  color: #4ade80;
-}
-
-.dark .milkdown-editor .cm-editor {
-  background-color: transparent !important;
-}
-
-.dark .milkdown-editor .cm-gutters {
-  background-color: transparent !important;
-  border-right: none !important;
-  color: rgba(255, 255, 255, 0.4) !important;
-}
-
-.dark .milkdown-editor .cm-activeLine {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-}
-
-.dark .milkdown-editor .cm-selectionBackground {
-  background-color: rgba(59, 130, 246, 0.3) !important;
-}
-
-.dark .milkdown-editor .cm-cursor {
-  border-left-color: #fff !important;
-}
-
-/* VSCode Dark 语法高亮 */
-.dark .milkdown-editor .cm-editor .tok-comment,
-.dark .milkdown-editor .cm-editor .ͼc {
-  color: #6a9955 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-keyword,
-.dark .milkdown-editor .cm-editor .ͼd,
-.dark .milkdown-editor .cm-editor .ͼ3,
-.dark .milkdown-editor .cm-editor .ͼ4 {
-  color: #569cd6 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-string,
-.dark .milkdown-editor .cm-editor .ͼ7 {
-  color: #ce9178 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-number,
-.dark .milkdown-editor .cm-editor .ͼe {
-  color: #b5cea8 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-variableName,
-.dark .milkdown-editor .cm-editor .ͼb {
-  color: #9cdcfe !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-typeName,
-.dark .milkdown-editor .cm-editor .ͼ14,
-.dark .milkdown-editor .cm-editor .ͼ5,
-.dark .milkdown-editor .cm-editor .ͼ6 {
-  color: #4ec9b0 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-function,
-.dark .milkdown-editor .cm-editor .tok-propertyName,
-.dark .milkdown-editor .cm-editor .ͼf {
-  color: #dcdcaa !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-operator,
-.dark .milkdown-editor .cm-editor .ͼ8 {
-  color: #d4d4d4 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-punctuation,
-.dark .milkdown-editor .cm-editor .ͼ9 {
-  color: #d4d4d4 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-tagName,
-.dark .milkdown-editor .cm-editor .ͼ10 {
-  color: #569cd6 !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-definition,
-.dark .milkdown-editor .cm-editor .ͼ11 {
-  color: #4fc1ff !important;
-}
-
-.dark .milkdown-editor .cm-editor .tok-bool,
-.dark .milkdown-editor .cm-editor .ͼ12 {
-  color: #569cd6 !important;
-}
-
-.dark .milkdown-editor .cm-editor .ͼ1,
-.dark .milkdown-editor .cm-editor .ͼ2 {
-  color: #d4d4d4 !important;
-}
-
-/* ==================== 暗色模式 Toolbar 和 Slash Menu 样式 ==================== */
-
-/* 暗色模式 Toolbar */
-.dark .milkdown .milkdown-toolbar {
-  background: var(--popover) !important;
-  border-color: var(--border) !important;
-  box-shadow: 
-    0 4px 12px -2px rgb(0 0 0 / 0.3),
-    0 2px 6px -1px rgb(0 0 0 / 0.2) !important;
-}
-
-.dark .milkdown .milkdown-toolbar .toolbar-item:hover {
-  background: var(--accent) !important;
-}
-
-.dark .milkdown .milkdown-toolbar .toolbar-item svg {
-  color: var(--muted-foreground) !important;
-  fill: var(--muted-foreground) !important;
-}
-
-.dark .milkdown .milkdown-toolbar .toolbar-item:hover svg {
-  color: var(--foreground) !important;
-  fill: var(--foreground) !important;
-}
-
-.dark .milkdown .milkdown-toolbar .toolbar-item.active svg {
-  color: oklch(0.7 0.15 250) !important;
-  fill: oklch(0.7 0.15 250) !important;
-}
-
-.dark .milkdown .milkdown-toolbar .divider {
-  background: var(--border) !important;
-}
-
-/* 暗色模式 Slash Menu */
-.dark .milkdown .milkdown-slash-menu {
-  background: var(--popover) !important;
-  border-color: var(--border) !important;
-  box-shadow: 
-    0 10px 38px -10px rgb(0 0 0 / 0.5),
-    0 10px 20px -15px rgb(0 0 0 / 0.3) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group h6 {
-  color: var(--muted-foreground) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li:hover,
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li.hover {
-  background: var(--accent) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li.active {
-  background: oklch(0.7 0.15 250 / 0.15) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li svg {
-  color: var(--muted-foreground) !important;
-  fill: var(--muted-foreground) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li:hover svg,
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li.hover svg {
-  color: var(--foreground) !important;
-  fill: var(--foreground) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group li > span {
-  color: var(--foreground) !important;
-}
-
-.dark .milkdown .milkdown-slash-menu .menu-groups .menu-group + .menu-group::before {
-  background: var(--border) !important;
-}
-
-/* 暗色模式 Block Handle */
-.dark .milkdown .milkdown-block-handle .operation-item svg {
-  color: var(--muted-foreground) !important;
-  fill: var(--muted-foreground) !important;
-}
-
-.dark .milkdown .milkdown-block-handle .operation-item:hover {
-  background: var(--accent) !important;
-}
-
-.dark .milkdown .milkdown-block-handle .operation-item:hover svg {
-  color: var(--foreground) !important;
-  fill: var(--foreground) !important;
-}
-
-.dark .milkdown .milkdown-block-handle .operation-item.active {
-  background: oklch(0.7 0.15 250 / 0.2) !important;
-}
-
-.dark .milkdown .milkdown-block-handle .operation-item.active svg {
-  color: oklch(0.7 0.15 250) !important;
-  fill: oklch(0.7 0.15 250) !important;
-}
-
-/* 暗色模式 Link Tooltip */
-.dark .milkdown .milkdown-link-preview,
-.dark .milkdown .milkdown-link-edit {
-  background: var(--popover) !important;
-  border-color: var(--border) !important;
-  box-shadow: 
-    0 4px 12px -2px rgb(0 0 0 / 0.4),
-    0 2px 6px -1px rgb(0 0 0 / 0.3) !important;
 }
 
 /* AI Chat 面板 Markdown 样式 */
@@ -1457,379 +644,129 @@ a .text-foreground,
   width: 100%;
 }
 
-/* ==================== CodeMirror 编辑器样式 ==================== */
-.codemirror-editor {
+/* ==================== Vditor 编辑器样式 ==================== */
+.vditor-editor-container {
   min-height: 400px;
   width: 100%;
 }
 
-.codemirror-editor .cm-editor {
-  min-height: 400px;
-  background: transparent;
+/* 完全移除 Vditor 所有边框 - 使用 .vditor 选择器（因为 Vditor 会合并容器类） */
+.vditor-editor-container.vditor,
+.vditor-editor-container .vditor {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  width: 100% !important;
 }
 
-.codemirror-editor .cm-editor.cm-focused {
-  outline: none;
+.vditor-editor-container .vditor-content,
+.vditor-editor-container.vditor .vditor-content {
+  background: transparent !important;
+  border: none !important;
+  width: 100% !important;
 }
 
-/* ==================== Live Preview 编辑器样式 ==================== */
-.live-preview-editor {
-  min-height: 400px;
-  width: 100%;
+.vditor-editor-container .vditor-ir,
+.vditor-editor-container .vditor-wysiwyg,
+.vditor-editor-container .vditor-sv,
+.vditor-editor-container.vditor .vditor-ir,
+.vditor-editor-container.vditor .vditor-wysiwyg,
+.vditor-editor-container.vditor .vditor-sv {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  min-width: 100% !important;
 }
 
-.live-preview-editor .cm-editor {
-  min-height: 400px;
-  background: transparent;
-  outline: none;
-  border: none;
+.vditor-editor-container .vditor-reset,
+.vditor-editor-container.vditor .vditor-reset {
+  border: none !important;
+  background: transparent !important;
 }
 
-.live-preview-editor .cm-editor.cm-focused {
-  outline: none;
-  border: none;
-}
-
-/* 移除 CodeMirror 默认的 focus 边框 */
-.live-preview-editor .cm-focused {
+/* 移除聚焦时的背景高亮和轮廓 */
+.vditor-editor-container .vditor-ir:focus,
+.vditor-editor-container .vditor-wysiwyg:focus,
+.vditor-editor-container .vditor-sv:focus,
+.vditor-editor-container .vditor-reset:focus,
+.vditor-editor-container.vditor .vditor-ir:focus,
+.vditor-editor-container.vditor .vditor-wysiwyg:focus,
+.vditor-editor-container.vditor .vditor-sv:focus,
+.vditor-editor-container.vditor .vditor-reset:focus {
+  background: transparent !important;
   outline: none !important;
+  box-shadow: none !important;
 }
 
-.live-preview-editor .cm-scroller {
-  outline: none;
+/* 移除大纲面板边框 */
+.vditor-editor-container .vditor-outline,
+.vditor-editor-container.vditor .vditor-outline {
+  border: none !important;
 }
 
-/* 选中文字背景 - 确保可见 */
-.codemirror-editor .cm-selectionBackground {
-  background-color: rgba(100, 150, 255, 0.3) !important;
+/* Vditor 全屏模式 */
+.vditor-editor-container .vditor--fullscreen,
+.vditor-editor-container.vditor--fullscreen {
+  z-index: 1000;
 }
 
-.codemirror-editor .cm-editor.cm-focused .cm-selectionBackground {
-  background-color: rgba(100, 150, 255, 0.4) !important;
+/* 隐藏 Vditor 工具栏 */
+.vditor-editor-container .vditor-toolbar,
+.vditor-editor-container.vditor .vditor-toolbar {
+  display: none !important;
+  border: none !important;
 }
 
-.codemirror-editor .cm-selectionLayer .cm-selectionBackground {
-  background-color: rgba(100, 150, 255, 0.3) !important;
+/* 移除 Vditor 预览面板边框 */
+.vditor-editor-container .vditor-preview,
+.vditor-editor-container.vditor .vditor-preview {
+  border: none !important;
 }
 
-.codemirror-editor .cm-editor.cm-focused .cm-selectionLayer .cm-selectionBackground {
-  background-color: rgba(100, 150, 255, 0.4) !important;
+/* 移除 Vditor 大纲标题边框 */
+.vditor-editor-container .vditor-outline__title,
+.vditor-editor-container.vditor .vditor-outline__title {
+  border: none !important;
 }
 
-/* CodeMirror 滚动条样式 */
-.codemirror-editor .cm-scroller {
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-  line-height: 1.6;
-}
-
-/* CodeMirror Markdown 语法高亮增强 */
-.codemirror-editor .cm-header {
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.codemirror-editor .cm-header-1 {
-  font-size: 1.5em;
-  line-height: 1.3;
-}
-
-.codemirror-editor .cm-header-2 {
-  font-size: 1.3em;
-  line-height: 1.4;
-}
-
-.codemirror-editor .cm-header-3 {
-  font-size: 1.1em;
-  line-height: 1.5;
-}
-
-.codemirror-editor .cm-strong {
-  font-weight: 700;
-  color: var(--foreground);
-}
-
-.codemirror-editor .cm-emphasis {
-  font-style: italic;
-  color: var(--foreground);
-}
-
-.codemirror-editor .cm-strikethrough {
-  text-decoration: line-through;
-  color: var(--muted-foreground);
-}
-
-.codemirror-editor .cm-link {
-  color: oklch(0.55 0.2 250);
-  text-decoration: underline;
-}
-
-.codemirror-editor .cm-url {
-  color: var(--muted-foreground);
-  font-size: 0.9em;
-}
-
-/* 行内代码 */
-.codemirror-editor .cm-monospace {
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-  background: var(--muted);
-  padding: 1px 4px;
-  border-radius: 3px;
-}
-
-/* 代码块语法标记 */
-.codemirror-editor .cm-meta {
-  color: var(--muted-foreground);
-}
-
-/* 引用块 */
-.codemirror-editor .cm-quote {
-  color: var(--muted-foreground);
-  font-style: italic;
-}
-
-/* 列表标记 */
-.codemirror-editor .cm-list {
-  color: var(--primary);
+/* 移除 IR 模式节点边框 */
+.vditor-editor-container .vditor-ir__node,
+.vditor-editor-container.vditor .vditor-ir__node {
+  border-bottom: none !important;
 }
 
 /* 暗色模式适配 */
-.dark .codemirror-editor .cm-activeLine {
-  background: oklch(0.3 0 0 / 0.3);
+.dark .vditor-editor-container.vditor,
+.dark .vditor-editor-container .vditor {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-.dark .codemirror-editor .cm-gutters {
-  background: transparent;
-  border-right: none;
+.dark .vditor-editor-container .vditor-content,
+.dark .vditor-editor-container.vditor .vditor-content {
+  background: transparent !important;
+  border: none !important;
 }
 
-.dark .codemirror-editor .cm-activeLineGutter {
-  background: transparent;
+.dark .vditor-editor-container .vditor-ir,
+.dark .vditor-editor-container .vditor-wysiwyg,
+.dark .vditor-editor-container .vditor-sv,
+.dark .vditor-editor-container.vditor .vditor-ir,
+.dark .vditor-editor-container.vditor .vditor-wysiwyg,
+.dark .vditor-editor-container.vditor .vditor-sv {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
 }
 
-/* ==================== 对齐容器样式 ==================== */
-/* 对齐 Directive 容器样式 */
-.directive-left,
-.directive-right,
-.directive-center,
-.directive-justify {
-  padding: 8px 0;
-  margin: 8px 0;
-  min-height: 1em;
+.dark .vditor-editor-container .vditor-reset,
+.dark .vditor-editor-container.vditor .vditor-reset {
+  background: transparent !important;
 }
 
-.directive-left {
-  text-align: left;
-}
-
-.directive-right {
-  text-align: right;
-}
-
-.directive-center {
-  text-align: center;
-}
-
-.directive-justify {
-  text-align: justify;
-}
-
-/* 编辑器中的对齐容器添加轻微边框，方便识别 */
-.milkdown-editor .directive-left,
-.milkdown-editor .directive-right,
-.milkdown-editor .directive-center,
-.milkdown-editor .directive-justify {
-  border-left: 2px solid var(--border);
-  padding-left: 12px;
-  position: relative;
-}
-
-/* 添加对齐类型标识 */
-.milkdown-editor .directive-left::before,
-.milkdown-editor .directive-right::before,
-.milkdown-editor .directive-center::before,
-.milkdown-editor .directive-justify::before {
-  position: absolute;
-  left: -2px;
-  top: 0;
-  font-size: 10px;
-  color: var(--muted-foreground);
-  background: var(--background);
-  padding: 0 4px;
-  transform: translateY(-50%);
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none; /* 确保不会阻止鼠标事件 */
-}
-
-.milkdown-editor .directive-left:hover::before,
-.milkdown-editor .directive-right:hover::before,
-.milkdown-editor .directive-center:hover::before,
-.milkdown-editor .directive-justify:hover::before {
-  opacity: 1;
-}
-
-.milkdown-editor .directive-left::before {
-  content: "left";
-}
-
-.milkdown-editor .directive-right::before {
-  content: "right";
-}
-
-.milkdown-editor .directive-center::before {
-  content: "center";
-}
-
-.milkdown-editor .directive-justify::before {
-  content: "justify";
-}
-
-/* 暗色模式适配 */
-.dark .milkdown-editor .directive-left,
-.dark .milkdown-editor .directive-right,
-.dark .milkdown-editor .directive-center,
-.dark .milkdown-editor .directive-justify {
-  border-left-color: var(--border);
-}
-
-/* ========================================
-   图片布局工具栏样式
-   ======================================== */
-
-.image-layout-toolbar {
-  position: absolute;
-  z-index: 100;
-  display: flex;
-  gap: 2px;
-  padding: 4px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  animation: image-toolbar-fade-in 0.15s ease-out;
-}
-
-@keyframes image-toolbar-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.image-layout-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--foreground);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.image-layout-btn:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.image-layout-btn.active {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-
-.image-layout-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* 暗色模式适配 */
-.dark .image-layout-toolbar {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* ========================================
-   覆盖 Crepe image-block 默认样式
-   使图片在对齐容器内响应 text-align
-   ======================================== */
-
-/* 重置 image-block 的默认居中样式 */
-.milkdown-editor milkdown-image-block,
-.milkdown-editor .image-block,
-.milkdown-editor [data-type="image-block"] {
-  display: inline-block !important;
-  text-align: left;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
-
-/* 关键：覆盖 .image-wrapper 的默认 flex 居中样式 */
-.milkdown-editor milkdown-image-block > .image-wrapper,
-.milkdown-editor .image-block > .image-wrapper,
-.milkdown-editor [data-type="image-block"] > .image-wrapper,
-.milkdown-editor .milkdown-image-block > .image-wrapper {
-  margin: 0 !important;
-  justify-content: flex-start !important; /* 默认左对齐，不居中 */
-}
-
-/* 在对齐容器内，让 image-block 响应容器的 text-align */
-.directive-left milkdown-image-block,
-.directive-left .image-block,
-.directive-left [data-type="image-block"],
-.directive-left .milkdown-image-block {
-  display: inline-block !important;
-}
-
-.directive-left .image-wrapper {
-  justify-content: flex-start !important;
-}
-
-.directive-right milkdown-image-block,
-.directive-right .image-block,
-.directive-right [data-type="image-block"],
-.directive-right .milkdown-image-block {
-  display: inline-block !important;
-}
-
-.directive-right .image-wrapper {
-  justify-content: flex-end !important;
-}
-
-.directive-center milkdown-image-block,
-.directive-center .image-block,
-.directive-center [data-type="image-block"],
-.directive-center .milkdown-image-block {
-  display: inline-block !important;
-}
-
-.directive-center .image-wrapper {
-  justify-content: center !important;
-}
-
-.directive-justify milkdown-image-block,
-.directive-justify .image-block,
-.directive-justify [data-type="image-block"],
-.directive-justify .milkdown-image-block {
-  display: inline-block !important;
-}
-
-.directive-justify .image-wrapper {
-  justify-content: flex-start !important;
-}
-
-/* 确保图片本身不会被拉伸 */
-.directive-left img,
-.directive-right img,
-.directive-center img,
-.directive-justify img {
-  max-width: 100%;
-  height: auto;
+.dark .vditor-editor-container .vditor-outline,
+.dark .vditor-editor-container.vditor .vditor-outline {
+  border: none !important;
 }
 

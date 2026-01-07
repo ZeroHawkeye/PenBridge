@@ -264,19 +264,18 @@ export async function initServerConfig(): Promise<void> {
     const modeConfig = await window.electronAPI!.appMode.get();
     
     if (modeConfig.isConfigured) {
-      if (modeConfig.mode === "local") {
-        // 本地模式，使用本地服务器地址
+      // 无论本地模式还是云端模式，都从 serverConfig 获取 baseUrl
+      // 这样可以兼容开发环境（端口3000）和生产环境（端口36925）
+      const config = await window.electronAPI!.serverConfig.get();
+      if (config.isConfigured && config.baseUrl) {
+        localStorage.setItem(SERVER_BASE_URL_KEY, config.baseUrl);
+        localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
+        localStorage.setItem(APP_MODE_KEY, modeConfig.mode || "local");
+      } else if (modeConfig.mode === "local") {
+        // 回退：如果没有 serverConfig，本地模式使用默认地址
         localStorage.setItem(SERVER_BASE_URL_KEY, LOCAL_SERVER_URL);
         localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
         localStorage.setItem(APP_MODE_KEY, "local");
-      } else if (modeConfig.mode === "cloud") {
-        // 云端模式，从 serverConfig 获取
-        const config = await window.electronAPI!.serverConfig.get();
-        if (config.isConfigured && config.baseUrl) {
-          localStorage.setItem(SERVER_BASE_URL_KEY, config.baseUrl);
-          localStorage.setItem(SERVER_CONFIGURED_KEY, "true");
-          localStorage.setItem(APP_MODE_KEY, "cloud");
-        }
       }
       return;
     }

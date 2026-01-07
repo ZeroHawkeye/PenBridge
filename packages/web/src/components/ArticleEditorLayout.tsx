@@ -204,46 +204,7 @@ export function ArticleEditorLayout({
     const editor = milkdownEditorRef.current;
     if (editor?.scrollToLine) {
       editor.scrollToLine(targetLineNumber);
-      
-      // 添加高亮效果
-      const container = editorContainerRef.current;
-      if (container) {
-        // 延迟一点执行高亮，等待滚动完成
-        setTimeout(() => {
-          // 查找对应的 DOM 元素并添加高亮
-          const cmLines = container.querySelectorAll(".cm-line");
-          // CodeMirror 可能只渲染可视区域，所以需要查找正确的行
-          // 先尝试通过行号标签查找
-          const gutterElements = container.querySelectorAll(".cm-gutterElement");
-          for (const gutter of gutterElements) {
-            if (gutter.textContent?.trim() === String(targetLineNumber)) {
-              // 找到对应的行号，获取同一行的内容元素
-              const lineIndex = Array.from(gutterElements).indexOf(gutter);
-              if (cmLines[lineIndex]) {
-                cmLines[lineIndex].classList.add("toc-highlight");
-                setTimeout(() => {
-                  cmLines[lineIndex].classList.remove("toc-highlight");
-                }, 2000);
-              }
-              return;
-            }
-          }
-          
-          // 如果没有行号标签，尝试通过索引查找（Live Preview 模式可能隐藏行号）
-          // 由于 CodeMirror 虚拟滚动，滚动后目标行应该在可视区域内
-          // 查找包含标题文本的行
-          for (const lineEl of cmLines) {
-            const lineText = lineEl.textContent?.trim() || "";
-            if (lineText.includes(heading.text)) {
-              lineEl.classList.add("toc-highlight");
-              setTimeout(() => {
-                lineEl.classList.remove("toc-highlight");
-              }, 2000);
-              return;
-            }
-          }
-        }, 100);
-      }
+      // Vditor 编辑器的 scrollToLine 内部已经处理了高亮效果
     }
   }, [content]);
 
@@ -324,13 +285,11 @@ export function ArticleEditorLayout({
       const scrollTop = savedScrollTopRef.current;
       savedScrollTopRef.current = null;
       
-      // Milkdown 编辑器初始化是异步的：
-      // 1. 使用 requestAnimationFrame 延迟初始化
-      // 2. 然后 crepe.create() 返回 Promise
+      // Vditor 编辑器初始化是异步的
       // 因此需要监听 DOM 变化，等待编辑器完全渲染后再恢复滚动
       const observer = new MutationObserver((_mutations, obs) => {
-        // 检查 Milkdown 编辑器是否已渲染（查找编辑器特有的元素）
-        const editor = container.querySelector('.milkdown');
+        // 检查 Vditor 编辑器是否已渲染（查找编辑器特有的元素）
+        const editor = container.querySelector('.vditor');
         if (editor) {
           obs.disconnect();
           requestAnimationFrame(() => {
