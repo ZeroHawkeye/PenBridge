@@ -13,12 +13,19 @@ FROM oven/bun:1 AS web-builder
 # 接收版本号构建参数
 ARG VERSION=1.0.0
 
-WORKDIR /app/packages/web
+WORKDIR /app
+
+# 复制根目录 package.json（用于 workspace 解析）
+COPY package.json ./
+
+# 复制 vditor workspace 依赖（本地修改版本）
+COPY vditor ./vditor
 
 # 复制前端 package.json 和 lock 文件
-COPY packages/web/package.json packages/web/bun.lock* ./
+COPY packages/web/package.json packages/web/bun.lock* ./packages/web/
 
 # 安装前端依赖
+WORKDIR /app/packages/web
 RUN bun install
 
 # 调试：检查 antd 是否安装
