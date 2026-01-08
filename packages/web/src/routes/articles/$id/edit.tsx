@@ -209,6 +209,19 @@ function EditArticlePage() {
   const contentLoadedRef = useRef(false);
   // 用于跟踪是否已聚焦过标题（新建文章时）
   const hasFocusedTitleRef = useRef(false);
+  // 用于跟踪上一次加载的文章 ID，只在 ID 变化时才重建编辑器
+  const prevArticleIdRef = useRef<number | null>(null);
+
+  // 当路由参数 id 变化时，重置相关状态
+  useEffect(() => {
+    const numericId = Number(id);
+    // 如果文章 ID 变化了，重置加载状态
+    if (prevArticleIdRef.current !== null && prevArticleIdRef.current !== numericId) {
+      isInitialLoadRef.current = true; // 重新标记为初始加载，避免触发自动保存
+      contentLoadedRef.current = false;
+      hasFocusedTitleRef.current = false;
+    }
+  }, [id]);
 
   // 元数据加载完成后立即更新（不包含 content）
   useEffect(() => {
@@ -250,7 +263,15 @@ function EditArticlePage() {
       // 将相对路径转换为完整 URL，以便编辑器正确显示图片
       const contentWithAbsoluteUrls = convertToAbsoluteUrls(articleContent.content || "");
       setContent(contentWithAbsoluteUrls);
-      setEditorKey((prev) => prev + 1);
+      
+      // 只在文章 ID 变化时才重建编辑器（递增 editorKey）
+      // 这样可以避免同一篇文章重复加载时不必要的编辑器重建
+      const currentArticleId = articleMeta.id;
+      if (prevArticleIdRef.current !== currentArticleId) {
+        setEditorKey((prev) => prev + 1);
+        prevArticleIdRef.current = currentArticleId;
+      }
+      
       contentLoadedRef.current = true;
 
       // 标记初始加载完成（延迟一下避免编辑器初始化触发保存）

@@ -6,6 +6,7 @@ import {
   useCallback,
   useImperativeHandle,
   useRef,
+  useEffect,
 } from "react";
 import { Code, Eye, Columns, ChevronDown, Check } from "lucide-react";
 import { Dropdown, Tooltip } from "antd";
@@ -73,8 +74,14 @@ function EditorSwitcherInner(
   // 编辑器 ref
   const editorRef = useRef<EditorRef>(null);
 
-  // 用于追踪内容，在模式切换时保持
+  // 用于追踪内容，仅在模式切换时使用（保持切换前的内容）
+  // 不再用于传递给编辑器的初始值
   const contentRef = useRef<string>(editorProps.value);
+
+  // 同步 contentRef 与外部 value（用于 getContent 方法的回退值）
+  useEffect(() => {
+    contentRef.current = editorProps.value;
+  }, [editorProps.value]);
 
   // 强制刷新 key（用于模式切换时重新初始化编辑器）
   const [refreshKey, setRefreshKey] = useState(0);
@@ -203,7 +210,7 @@ function EditorSwitcherInner(
       <VditorEditor
         key={`vditor-${finalEditorKey}`}
         ref={editorRef}
-        value={contentRef.current || editorProps.value}
+        value={editorProps.value}
         onChange={handleContentChange}
         placeholder={editorProps.placeholder}
         readonly={editorProps.readonly}
