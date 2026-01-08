@@ -117,13 +117,16 @@ if (existsSync(PUBLIC_DIR)) {
   app.get("*", async (c) => {
     const path = c.req.path;
 
-    // 排除 API 路径，这些路径应该由前面定义的路由处理
+    // 排除 API 路径和静态资源路径，这些路径应该由前面定义的路由处理
     // 如果请求到达这里说明路由未匹配，返回 404
     if (path === "/health" ||
         path === "/api" ||
         path.startsWith("/api/") ||
         path.startsWith("/trpc/") ||
-        path.startsWith("/uploads/")) {
+        path.startsWith("/uploads/") ||
+        path.startsWith("/vditor/") ||
+        path.startsWith("/dict/") ||
+        path.startsWith("/assets/")) {
       return c.json({ error: "Not found" }, 404);
     }
 
