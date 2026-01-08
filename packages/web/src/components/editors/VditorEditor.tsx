@@ -11,6 +11,11 @@ import "vditor/dist/index.css";
 import type { BaseEditorProps, EditorRef, VditorMode } from "./types";
 import { getServerBaseUrlSync } from "@/utils/serverConfig";
 
+// 检测是否在 Electron 环境中运行
+const isElectron = () => {
+  return typeof window !== "undefined" && window.electronAPI !== undefined;
+};
+
 /**
  * 处理对齐指令语法 (:::center, :::left, :::right, :::justify)
  * 将 Markdown 中的对齐指令转换为带样式的 HTML
@@ -143,7 +148,8 @@ function VditorEditorInner(
 
     const vditor = new Vditor(containerRef.current, {
       // 使用本地构建的 vditor 资源（包含修改过的 lute.min.js，支持对齐指令）
-      cdn: "/vditor",
+      // Electron 使用相对路径（file:// 协议），Web/Docker 使用绝对路径
+      cdn: isElectron() ? "./vditor" : "/vditor",
       // 编辑器模式: ir(即时渲染，类似 Typora), wysiwyg(所见即所得), sv(分屏预览)
       mode: mode,
       // 初始内容
