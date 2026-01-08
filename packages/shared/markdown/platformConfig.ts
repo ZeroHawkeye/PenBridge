@@ -38,6 +38,21 @@ export const platformConfigs: Record<string, PlatformSyntaxConfig> = {
     },
     defaultStrategy: "remove",
   },
+  
+  // CSDN - 不支持对齐语法，需要移除
+  csdn: {
+    platform: "csdn",
+    name: "CSDN",
+    supportsHtml: true,  // CSDN 支持部分 HTML，但不支持对齐指令
+    strategies: {
+      // 对齐语法 CSDN 不支持，移除指令语法，只保留内容
+      left: "remove",
+      right: "remove",
+      center: "remove",
+      justify: "remove",
+    },
+    defaultStrategy: "remove",
+  },
 };
 
 /**

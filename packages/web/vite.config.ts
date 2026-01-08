@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
 import { viteStaticCopy } from "vite-plugin-static-copy";
+import commonjs from "vite-plugin-commonjs";
 
 // 根据构建目标设置 base 路径
 // - Electron 打包：使用相对路径 "./"（file:// 协议）
@@ -24,6 +25,8 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
+    // 支持 CommonJS/UMD 模块（如本地构建的 vditor）
+    commonjs(),
     // 复制拼写检查词典文件到构建目录
     viteStaticCopy({
       targets: [
@@ -34,6 +37,11 @@ export default defineConfig({
         {
           src: "node_modules/dictionary-en/index.dic",
           dest: "dict",
+        },
+        // 复制本地构建的 vditor 资源（包含修改过的 lute.min.js）
+        {
+          src: "node_modules/vditor/dist/*",
+          dest: "vditor/dist",
         },
       ],
     }),

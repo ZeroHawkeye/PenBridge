@@ -3,6 +3,7 @@ node_modules/
 
 # Build outputs
 dist/
+!vditor/dist/
 *.tsbuildinfo
 
 # Electron build outputs
@@ -42,4 +43,5 @@ nul
 docs/
 opencode/
 lute
-vditor
+# vditor 是本地修改的依赖，需要提交到仓库
+# vditor 内部的 node_modules 和 dist 由各自的 .gitignore 管理

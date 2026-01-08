@@ -11,6 +11,54 @@ import "vditor/dist/index.css";
 import type { BaseEditorProps, EditorRef, VditorMode } from "./types";
 import { getServerBaseUrlSync } from "@/utils/serverConfig";
 
+/**
+ * 处理对齐指令语法 (:::center, :::left, :::right, :::justify)
+ * 将 Markdown 中的对齐指令转换为带样式的 HTML
+ * 
+ * 输入格式：
+ * :::center
+ * 内容
+ * :::
+ * 
+ * 输出格式：
+ * <div style="text-align: center">内容</div>
+ */
+function transformAlignmentDirectives(content: string): string {
+  const alignmentNames = ["center", "left", "right", "justify"];
+  let result = content;
+  
+  for (const alignment of alignmentNames) {
+    // 匹配容器指令: :::name ... :::
+    // 注意：在 HTML 预览中，:::name 可能已经被包裹在 <p> 标签中
+    // 所以我们需要处理多种情况
+    
+    // 情况1：纯文本格式（在 Markdown 源码中）
+    const pureTextRegex = new RegExp(
+      `:::${alignment}\\s*\\n([\\s\\S]*?)\\n:::`,
+      "g"
+    );
+    
+    result = result.replace(pureTextRegex, (_match, innerContent: string) => {
+      const trimmedContent = innerContent.trim();
+      return `<div style="text-align: ${alignment}">${trimmedContent}</div>`;
+    });
+    
+    // 情况2：被 <p> 标签包裹的格式（在 HTML 预览中）
+    // 匹配 <p>:::name</p> ... <p>:::</p> 模式
+    const htmlWrappedRegex = new RegExp(
+      `<p>:::${alignment}<\\/p>([\\s\\S]*?)<p>:::<\\/p>`,
+      "gi"
+    );
+    
+    result = result.replace(htmlWrappedRegex, (_match, innerContent: string) => {
+      const trimmedContent = innerContent.trim();
+      return `<div class="align-directive align-${alignment}" style="text-align: ${alignment}">${trimmedContent}</div>`;
+    });
+  }
+  
+  return result;
+}
+
 // 将图片路径转换为正确的完整 URL
 function convertImageUrl(url: string): string {
   // 如果是 base64，直接返回
@@ -94,6 +142,8 @@ function VditorEditorInner(
       : `${baseUrl}/api/upload`;
 
     const vditor = new Vditor(containerRef.current, {
+      // 使用本地构建的 vditor 资源（包含修改过的 lute.min.js，支持对齐指令）
+      cdn: "/vditor",
       // 编辑器模式: ir(即时渲染，类似 Typora), wysiwyg(所见即所得), sv(分屏预览)
       mode: mode,
       // 初始内容
@@ -173,22 +223,28 @@ function VditorEditorInner(
           fixTermTypo: true,
           toc: true,
         },
-        // 渲染前转换 - 处理图片路径
+        // 渲染前转换 - 处理图片路径和对齐指令
         transform: (html: string) => {
+          let result = html;
+          
+          // 1. 处理对齐指令语法 (:::center, :::left, :::right, :::justify)
+          result = transformAlignmentDirectives(result);
+          
+          // 2. 处理图片路径
           const serverBaseUrl = getServerBaseUrlSync();
-          if (!serverBaseUrl) return html;
-          
-          // 1. 将相对路径 src="/uploads/..." 转换为完整 URL
-          let result = html.replace(
-            /src="(\/uploads\/[^"]+)"/g,
-            `src="${serverBaseUrl}$1"`
-          );
-          
-          // 2. 将旧的完整 URL（如 http://localhost:3000/uploads/...）替换为当前 baseUrl
-          result = result.replace(
-            /src="https?:\/\/[^"]*?(\/uploads\/[^"]+)"/g,
-            `src="${serverBaseUrl}$1"`
-          );
+          if (serverBaseUrl) {
+            // 将相对路径 src="/uploads/..." 转换为完整 URL
+            result = result.replace(
+              /src="(\/uploads\/[^"]+)"/g,
+              `src="${serverBaseUrl}$1"`
+            );
+            
+            // 将旧的完整 URL（如 http://localhost:3000/uploads/...）替换为当前 baseUrl
+            result = result.replace(
+              /src="https?:\/\/[^"]*?(\/uploads\/[^"]+)"/g,
+              `src="${serverBaseUrl}$1"`
+            );
+          }
           
           return result;
         },

@@ -795,3 +795,39 @@ a .text-foreground,
   border: none !important;
 }
 
+/* ==================== 对齐指令样式 ==================== */
+/* 用于预览时的对齐指令渲染 */
+.align-directive {
+  margin: 1em 0;
+  padding: 0.5em;
+  border-radius: 4px;
+}
+
+.align-directive.align-center {
+  text-align: center;
+}
+
+.align-directive.align-left {
+  text-align: left;
+}
+
+.align-directive.align-right {
+  text-align: right;
+}
+
+.align-directive.align-justify {
+  text-align: justify;
+}
+
+/* 预览模式下的对齐指令视觉提示 */
+.vditor-preview .align-directive,
+.vditor-ir__preview .align-directive {
+  position: relative;
+}
+
+/* 暗色模式对齐指令样式 */
+.dark .align-directive {
+  border-color: hsl(var(--border));
+}
+
+
