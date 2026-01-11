@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ChevronRight,
@@ -12,6 +12,7 @@ import {
   Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/utils/trpc";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -92,7 +93,24 @@ export function TreeNodeItem({
   }, [node.type, node.id, editingFolderId]);
 
   const navigate = useNavigate();
+  const trpcUtils = trpc.useContext();
+  const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isExpanded = node.type === "folder" && expandedFolders.has(node.id);
+
+  const handleArticleMouseEnter = useCallback(() => {
+    if (node.type !== "article") return;
+    prefetchTimerRef.current = setTimeout(() => {
+      trpcUtils.article.getMeta.prefetch({ id: node.id });
+      trpcUtils.article.getContent.prefetch({ id: node.id });
+    }, 100);
+  }, [node.type, node.id, trpcUtils]);
+
+  const handleArticleMouseLeave = useCallback(() => {
+    if (prefetchTimerRef.current) {
+      clearTimeout(prefetchTimerRef.current);
+      prefetchTimerRef.current = null;
+    }
+  }, []);
 
   const handleSaveName = (newName: string) => {
     if (node.type === "folder") {
@@ -449,6 +467,8 @@ export function TreeNodeItem({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onMouseEnter={handleArticleMouseEnter}
+            onMouseLeave={handleArticleMouseLeave}
             to="/articles/$id/edit"
             params={{ id: String(node.id) }}
             onClick={onArticleClick}
