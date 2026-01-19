@@ -69,10 +69,13 @@ export interface ElectronShellAPI {
   openExternal: (url: string) => Promise<{ success: boolean; message?: string }>;
 }
 
-// GitHub Copilot 认证辅助 API
 export interface ElectronCopilotAuthAPI {
   openVerificationPage: (verificationUri: string) => Promise<{ success: boolean; message?: string }>;
   copyUserCode: (userCode: string) => Promise<{ success: boolean; message?: string }>;
+}
+
+export interface ElectronClaudeCodeAuthAPI {
+  openAuthorizePage: (authorizeUrl: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 // 更新状态类型
@@ -129,6 +132,7 @@ export interface ElectronAPI {
   juejinAuth: ElectronJuejinAuthAPI;
   csdnAuth: ElectronCsdnAuthAPI;
   copilotAuth: ElectronCopilotAuthAPI;
+  claudeCodeAuth: ElectronClaudeCodeAuthAPI;
   serverConfig: ElectronServerConfigAPI;
   shell: ElectronShellAPI;
   updater: ElectronUpdaterAPI;

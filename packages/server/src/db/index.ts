@@ -10,6 +10,7 @@ import { AdminSession } from "../entities/AdminSession";
 import { AIProvider, AIModel } from "../entities/AIProvider";
 import { AIChatSession, AIChatMessage } from "../entities/AIChat";
 import { CopilotAuth } from "../entities/CopilotAuth";
+import { ClaudeCodeAuth } from "../entities/ClaudeCodeAuth";
 // @ts-ignore
 import initSqlJs from "sql.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
@@ -152,7 +153,7 @@ async function createDataSource(): Promise<DataSource> {
     database: dbFile ? new Uint8Array(dbFile) : undefined,
     synchronize: true,
     logging: false,
-    entities: [User, Article, ArticleVersion, Folder, ScheduledTask, EmailConfig, AdminUser, AdminSession, AIProvider, AIModel, AIChatSession, AIChatMessage, CopilotAuth],
+    entities: [User, Article, ArticleVersion, Folder, ScheduledTask, EmailConfig, AdminUser, AdminSession, AIProvider, AIModel, AIChatSession, AIChatMessage, CopilotAuth, ClaudeCodeAuth],
     driver,
     autoSave: true,
     autoSaveCallback: createDebouncedSave(),

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { trpc } from "@/utils/trpc";
 import { CopilotConnect } from "./ai-config/CopilotConnect";
+import { ClaudeCodeConnect } from "./ai-config/ClaudeCodeConnect";
 import { ProviderManager } from "./ai-config/ProviderManager";
 import { ModelManager } from "./ai-config/ModelManager";
 import { TestDialog } from "./ai-config/TestDialog";
@@ -50,8 +51,9 @@ export function AIConfigSettings() {
         </p>
       </div>
 
-      {/* GitHub Copilot 连接 */}
       <CopilotConnect />
+
+      <ClaudeCodeConnect />
 
       {/* 供应商管理 */}
       <ProviderManager providers={providers as Provider[] | undefined} />

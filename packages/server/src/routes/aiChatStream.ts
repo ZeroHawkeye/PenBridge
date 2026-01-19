@@ -17,8 +17,11 @@ import {
   buildStreamTextOptions,
   type ThinkingConfig,
   type GitHubCopilotAdapterOptions,
+  type ClaudeCodeAdapterOptions,
 } from "../services/aiProviderAdapter";
 import { CopilotAuth } from "../entities/CopilotAuth";
+import { ClaudeCodeAuth } from "../entities/ClaudeCodeAuth";
+import { CLAUDE_CODE_SYSTEM_PREFIX } from "../services/claudeCodeAuth";
 import { 
   convertMessagesToAISDK, 
   setLogPrefix, 
@@ -196,9 +199,9 @@ aiChatStreamRouter.post("/", async (c) => {
 
     const capabilities = modelConfig?.capabilities || defaultCapabilities;
 
-    // 创建 Provider 适配器
-    // 对于 GitHub Copilot，需要获取认证信息
     let copilotOptions: GitHubCopilotAdapterOptions | undefined;
+    let claudeCodeOptions: ClaudeCodeAdapterOptions | undefined;
+    
     if (provider.sdkType === "github-copilot") {
       const copilotAuthRepo = AppDataSource.getRepository(CopilotAuth);
       const copilotAuth = await copilotAuthRepo.findOne({ where: { userId: 1 } });
@@ -215,7 +218,6 @@ aiChatStreamRouter.post("/", async (c) => {
           expiresAt: copilotAuth.expiresAt,
           enterpriseUrl: copilotAuth.enterpriseUrl,
         },
-        // Token 更新回调：保存刷新后的 token 到数据库
         onTokenUpdate: async (newAuth) => {
           await copilotAuthRepo.update(
             { userId: 1 },
@@ -228,13 +230,43 @@ aiChatStreamRouter.post("/", async (c) => {
         },
       };
       logStep("已获取 GitHub Copilot 认证信息");
+    } else if (provider.sdkType === "claude-code") {
+      const claudeCodeAuthRepo = AppDataSource.getRepository(ClaudeCodeAuth);
+      const claudeCodeAuth = await claudeCodeAuthRepo.findOne({ where: { userId: 1 } });
+      
+      if (!claudeCodeAuth) {
+        logStep("错误: Claude Code 未连接");
+        return c.json({ error: "Claude Code 未连接，请先在设置中连接" }, 400);
+      }
+      
+      claudeCodeOptions = {
+        auth: {
+          authType: claudeCodeAuth.authType,
+          accessToken: claudeCodeAuth.accessToken,
+          refreshToken: claudeCodeAuth.refreshToken,
+          expiresAt: claudeCodeAuth.expiresAt,
+          subscriptionType: claudeCodeAuth.subscriptionType,
+          email: claudeCodeAuth.email,
+        },
+        onTokenUpdate: async (newAuth) => {
+          await claudeCodeAuthRepo.update(
+            { userId: 1 },
+            {
+              accessToken: newAuth.accessToken,
+              refreshToken: newAuth.refreshToken,
+              expiresAt: newAuth.expiresAt,
+            }
+          );
+          logStep("Claude Code Token 已自动刷新并保存");
+        },
+      };
+      logStep("已获取 Claude Code 认证信息");
     }
 
-    const adapter = createProviderAdapter(provider, copilotOptions);
+    const adapter = createProviderAdapter(provider, copilotOptions, claudeCodeOptions);
     const model = adapter.createModel(modelId);
     logStep(`使用 ${provider.sdkType} SDK 创建模型: ${modelId}`);
 
-    // 预先计算工具是否启用
     const shouldEnableTools = enableTools !== false && adapter.supportsFunctionCalling(capabilities);
     logStep(`工具配置: enableTools=${enableTools}, functionCallingSupported=${capabilities.functionCalling}, 最终=${shouldEnableTools}`);
 
@@ -258,17 +290,36 @@ aiChatStreamRouter.post("/", async (c) => {
         }
       : undefined;
 
-    // 构建最终的系统消息
-    const finalSystemMessage = buildSystemMessage(
+    let finalSystemMessage = buildSystemMessage(
       systemMessage,
       articleContextForPrompt,
       toolInfoList,
       shouldEnableTools
     );
 
-    // 转换消息格式以适配 AI SDK v6
+    if (provider.sdkType === "claude-code") {
+      finalSystemMessage = {
+        ...finalSystemMessage,
+        content: CLAUDE_CODE_SYSTEM_PREFIX + "\n\n" + (finalSystemMessage.content || ""),
+      };
+      logStep("已添加 Claude Code 系统提示词前缀");
+    }
+
     const convertedUserMessages = convertMessagesToAISDK(userMessages);
-    const finalMessages = [finalSystemMessage, ...convertedUserMessages];
+    
+    const filteredUserMessages = convertedUserMessages.filter((msg) => {
+      if (msg.role === "assistant") {
+        if (typeof msg.content === "string" && msg.content.trim() === "") {
+          return false;
+        }
+        if (Array.isArray(msg.content) && msg.content.length === 0) {
+          return false;
+        }
+      }
+      return true;
+    });
+    
+    const finalMessages = [finalSystemMessage, ...filteredUserMessages];
 
     // 调试：打印转换后的消息格式
     console.log(`${logPrefix} 转换后的消息 (共 ${finalMessages.length} 条):`);

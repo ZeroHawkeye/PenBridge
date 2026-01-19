@@ -98,15 +98,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     syncToServer: () => ipcRenderer.invoke("csdnAuth:syncToServer"),
   },
 
-  // GitHub Copilot 认证辅助（主要逻辑在后端）
   copilotAuth: {
-    // 打开 GitHub 设备授权页面
     openVerificationPage: (verificationUri: string) =>
       ipcRenderer.invoke("copilotAuth:openVerificationPage", verificationUri),
-
-    // 复制用户码到剪贴板
     copyUserCode: (userCode: string) =>
       ipcRenderer.invoke("copilotAuth:copyUserCode", userCode),
+  },
+
+  claudeCodeAuth: {
+    openAuthorizePage: (authorizeUrl: string) =>
+      ipcRenderer.invoke("claudeCodeAuth:openAuthorizePage", authorizeUrl),
   },
 
   // 服务器配置相关
@@ -231,6 +232,9 @@ declare global {
       copilotAuth: {
         openVerificationPage: (verificationUri: string) => Promise<{ success: boolean; message?: string }>;
         copyUserCode: (userCode: string) => Promise<{ success: boolean; message?: string }>;
+      };
+      claudeCodeAuth: {
+        openAuthorizePage: (authorizeUrl: string) => Promise<{ success: boolean; message?: string }>;
       };
       serverConfig: {
         get: () => Promise<{ baseUrl: string; isConfigured: boolean }>;

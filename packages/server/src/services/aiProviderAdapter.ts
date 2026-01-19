@@ -7,6 +7,7 @@
 
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import type { LanguageModel } from "ai";
 import type { AIProvider, AIModel, ModelCapabilities, AISDKType } from "../entities/AIProvider";
 import {
@@ -15,6 +16,13 @@ import {
   getCopilotApiBaseUrl,
   COPILOT_HEADERS,
 } from "./githubCopilotAuth";
+import {
+  type ClaudeCodeAuthInfo,
+  refreshTokenIfNeeded,
+  ANTHROPIC_VERSION,
+  ANTHROPIC_BETA,
+  CLAUDE_CODE_SYSTEM_PREFIX,
+} from "./claudeCodeAuth";
 
 /**
  * 推理努力程度 (仅 OpenAI SDK 支持)
@@ -316,20 +324,248 @@ export class GitHubCopilotAdapter implements AIProviderAdapterInterface {
   }
 }
 
-/**
- * GitHub Copilot 适配器创建选项
- */
 export interface GitHubCopilotAdapterOptions {
   auth: CopilotAuthInfo;
   onTokenUpdate?: CopilotTokenUpdateCallback;
 }
 
-/**
- * 创建 Provider 适配器的工厂函数
- */
+export type ClaudeCodeTokenUpdateCallback = (auth: ClaudeCodeAuthInfo) => Promise<void>;
+
+export interface ClaudeCodeAdapterOptions {
+  auth: ClaudeCodeAuthInfo;
+  onTokenUpdate?: ClaudeCodeTokenUpdateCallback;
+}
+
+export class ClaudeCodeAdapter implements AIProviderAdapterInterface {
+  readonly sdkType: AISDKType = "claude-code";
+  
+  private readonly provider: ReturnType<typeof createAnthropic>;
+  private auth: ClaudeCodeAuthInfo;
+  private readonly onTokenUpdate?: ClaudeCodeTokenUpdateCallback;
+  
+  constructor(config: ClaudeCodeAdapterOptions) {
+    this.auth = config.auth;
+    this.onTokenUpdate = config.onTokenUpdate;
+    
+    const fullBeta = this.auth.authType === "oauth" 
+      ? "oauth-2025-04-20,interleaved-thinking-2025-05-14,claude-code-20250219"
+      : ANTHROPIC_BETA;
+    
+    this.provider = createAnthropic({
+      apiKey: this.auth.authType === "api_key" ? this.auth.accessToken : "",
+      headers: {
+        "anthropic-beta": fullBeta,
+      },
+      fetch: this.createAuthenticatedFetch() as any,
+    });
+  }
+  
+  private createAuthenticatedFetch() {
+    const TOOL_PREFIX = "mcp_";
+    
+    return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      // OAuth 模式下刷新 token
+      if (this.auth.authType === "oauth") {
+        try {
+          const refreshedAuth = await refreshTokenIfNeeded(this.auth);
+          if (refreshedAuth.accessToken !== this.auth.accessToken) {
+            this.auth = refreshedAuth;
+            if (this.onTokenUpdate) {
+              await this.onTokenUpdate(this.auth);
+            }
+          }
+        } catch (error) {
+          console.error("[ClaudeCodeAdapter] Token 刷新失败:", error);
+        }
+      }
+      
+      const headers = new Headers(init?.headers);
+      headers.set("anthropic-version", ANTHROPIC_VERSION);
+      
+      if (this.auth.authType === "oauth") {
+        headers.delete("x-api-key");
+        headers.set("Authorization", `Bearer ${this.auth.accessToken}`);
+        headers.set("user-agent", "claude-cli/2.1.2 (external, cli)");
+        
+        const incomingBeta = headers.get("anthropic-beta") || "";
+        const incomingBetasList = incomingBeta.split(",").map(b => b.trim()).filter(Boolean);
+        const includeClaudeCode = incomingBetasList.includes("claude-code-20250219");
+        const mergedBetas = [
+          "oauth-2025-04-20",
+          "interleaved-thinking-2025-05-14",
+          ...(includeClaudeCode ? ["claude-code-20250219"] : []),
+        ].join(",");
+        headers.set("anthropic-beta", mergedBetas);
+      } else {
+        headers.set("anthropic-beta", ANTHROPIC_BETA);
+      }
+      
+      let requestInput = input;
+      let body = init?.body;
+      
+      if (this.auth.authType === "oauth") {
+        // URL 添加 ?beta=true
+        try {
+          let requestUrl: URL | null = null;
+          if (typeof input === "string" || input instanceof URL) {
+            requestUrl = new URL(input.toString());
+          } else if (input instanceof Request) {
+            requestUrl = new URL(input.url);
+          }
+          
+          if (requestUrl && requestUrl.pathname === "/v1/messages" && !requestUrl.searchParams.has("beta")) {
+            requestUrl.searchParams.set("beta", "true");
+            requestInput = input instanceof Request
+              ? new Request(requestUrl.toString(), input)
+              : requestUrl;
+          }
+        } catch (error) {
+          console.debug("[ClaudeCodeAdapter] URL 解析失败:", error);
+        }
+        
+        // 处理请求体
+        if (body && typeof body === "string") {
+          try {
+            const parsed = JSON.parse(body);
+            
+            // 关键：system prompt 必须拆分为多个块，第一个块固定为 Claude Code 身份标识
+            const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
+            
+            if (parsed.system && Array.isArray(parsed.system)) {
+              const customSystemBlocks = parsed.system.map((item: any) => {
+                if (item.type === "text" && item.text) {
+                  let text = item.text;
+                  // 移除已有的 Claude Code 身份前缀（避免重复）
+                  if (text.startsWith(CLAUDE_CODE_IDENTITY)) {
+                    text = text.substring(CLAUDE_CODE_IDENTITY.length).trim();
+                  }
+                  return text ? { ...item, text } : null;
+                }
+                return item;
+              }).filter(Boolean);
+              
+              parsed.system = [
+                { type: "text", text: CLAUDE_CODE_IDENTITY },
+                ...customSystemBlocks
+              ];
+            } else {
+              parsed.system = [{ type: "text", text: CLAUDE_CODE_IDENTITY }];
+            }
+            
+            // tool 名称添加 mcp_ 前缀
+            if (parsed.tools && Array.isArray(parsed.tools)) {
+              parsed.tools = parsed.tools.map((tool: any) => ({
+                ...tool,
+                name: tool.name ? `${TOOL_PREFIX}${tool.name}` : tool.name,
+              }));
+            }
+            
+            // messages 中的 tool_use 也需要添加前缀
+            if (parsed.messages && Array.isArray(parsed.messages)) {
+              parsed.messages = parsed.messages.map((msg: any) => {
+                if (msg.content && Array.isArray(msg.content)) {
+                  msg.content = msg.content.map((block: any) => {
+                    if (block.type === "tool_use" && block.name) {
+                      return { ...block, name: `${TOOL_PREFIX}${block.name}` };
+                    }
+                    return block;
+                  });
+                }
+                return msg;
+              });
+            }
+            
+            body = JSON.stringify(parsed);
+          } catch (error) {
+            console.debug("[ClaudeCodeAdapter] 请求体解析失败:", error);
+          }
+        }
+      }
+      
+      const response = await fetch(requestInput, { ...init, body, headers });
+      
+      if (this.auth.authType === "oauth" && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const encoder = new TextEncoder();
+        
+        const stream = new ReadableStream({
+          async pull(controller) {
+            try {
+              const { done, value } = await reader.read();
+              if (done) {
+                controller.close();
+                return;
+              }
+              
+              let text = decoder.decode(value, { stream: true });
+              text = text.replace(/"name"\s*:\s*"mcp_([^"]+)"/g, '"name": "$1"');
+              controller.enqueue(encoder.encode(text));
+            } catch (error) {
+              console.error("[ClaudeCodeAdapter] 流读取错误:", error);
+              controller.error(error);
+            }
+          },
+        });
+        
+        return new Response(stream, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      }
+      
+      return response;
+    };
+  }
+  
+  createModel(modelId: string): LanguageModel {
+    return this.provider(modelId);
+  }
+  
+  supportsNativeReasoning(): boolean {
+    return true;
+  }
+  
+  supportsVision(capabilities?: ModelCapabilities): boolean {
+    return capabilities?.vision ?? true;
+  }
+  
+  supportsFunctionCalling(capabilities?: ModelCapabilities): boolean {
+    return capabilities?.functionCalling ?? true;
+  }
+  
+  getProviderOptions(options: ProviderStreamOptions): Record<string, any> {
+    const providerOptions: Record<string, any> = {};
+    
+    if (options.reasoning?.enabled) {
+      providerOptions.anthropic = {
+        thinking: {
+          type: "enabled",
+          budget_tokens: options.reasoning.effort === "high" ? 20000 : 
+                        options.reasoning.effort === "low" ? 5000 : 10000,
+        },
+      };
+    }
+    
+    return Object.keys(providerOptions).length > 0 
+      ? { providerOptions } 
+      : {};
+  }
+  
+  getAuth(): ClaudeCodeAuthInfo {
+    return this.auth;
+  }
+  
+  getSystemPromptPrefix(): string {
+    return CLAUDE_CODE_SYSTEM_PREFIX;
+  }
+}
+
 export function createProviderAdapter(
   provider: AIProvider,
-  copilotOptions?: GitHubCopilotAdapterOptions
+  copilotOptions?: GitHubCopilotAdapterOptions,
+  claudeCodeOptions?: ClaudeCodeAdapterOptions
 ): AIProviderAdapterInterface {
   const config = {
     apiKey: provider.apiKey,
@@ -345,24 +581,27 @@ export function createProviderAdapter(
         throw new Error("GitHub Copilot 适配器需要认证信息");
       }
       return new GitHubCopilotAdapter(copilotOptions);
+    case "claude-code":
+      if (!claudeCodeOptions) {
+        throw new Error("Claude Code 适配器需要认证信息");
+      }
+      return new ClaudeCodeAdapter(claudeCodeOptions);
     case "openai-compatible":
     default:
       return new OpenAICompatibleAdapter(config);
   }
 }
 
-/**
- * 根据 Provider 和 Model 配置创建 AI 模型实例
- */
 export function createAIModelInstance(
   provider: AIProvider,
   model: AIModel,
-  copilotOptions?: GitHubCopilotAdapterOptions
+  copilotOptions?: GitHubCopilotAdapterOptions,
+  claudeCodeOptions?: ClaudeCodeAdapterOptions
 ): {
   model: LanguageModel;
   adapter: AIProviderAdapterInterface;
 } {
-  const adapter = createProviderAdapter(provider, copilotOptions);
+  const adapter = createProviderAdapter(provider, copilotOptions, claudeCodeOptions);
   const modelInstance = adapter.createModel(model.modelId);
   
   return {

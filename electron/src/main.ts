@@ -4,6 +4,7 @@ import { TencentAuth } from "./auth/tencentAuth";
 import { JuejinAuth } from "./auth/juejinAuth";
 import { CsdnAuth } from "./auth/csdnAuth";
 import { registerCopilotAuthHandlers } from "./auth/copilotAuth";
+import { registerClaudeCodeAuthHandlers } from "./auth/claudeCodeAuth";
 import { createStore, AppMode } from "./store";
 import { initAutoUpdater } from "./autoUpdater";
 import {
@@ -579,12 +580,12 @@ function registerCsdnAuthHandlers() {
   });
 }
 
-// 注册 IPC 处理器
 function registerIpcHandlers() {
   registerTencentAuthHandlers();
   registerJuejinAuthHandlers();
   registerCsdnAuthHandlers();
   registerCopilotAuthHandlers();
+  registerClaudeCodeAuthHandlers();
 }
 
 // 初始化应用模式（启动本地服务器等）
