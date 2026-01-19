@@ -100,6 +100,7 @@ export function useChatSession(options: UseChatSessionOptions): ChatSessionState
           providerName: provider?.name || "未知供应商",
           contextLength: m.contextLength,
           capabilities: m.capabilities,
+          aiLoopConfig: m.aiLoopConfig,
         };
       });
   }, [providers, models]);

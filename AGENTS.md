@@ -203,7 +203,7 @@ pen-bridge/
 | `MessageItem` | 消息渲染（支持 Markdown） |
 | `ToolCallBlock` | 工具调用展示 |
 | `ThinkingBlock` | 深度思考过程展示 |
-| `DiffPreviewDialog` | 内容变更 Diff 预览 |
+| `InlineDiffPreview` | 内联 Diff 预览组件 |
 | `ToolPermissionDialog` | 工具权限配置 |
 
 #### 文件树 (file-tree/)

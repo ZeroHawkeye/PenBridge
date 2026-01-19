@@ -81,109 +81,53 @@ export async function executeFrontendTool(
           return { text: truncated, truncated: true };
         };
         
-        // 如果指定了行范围，按行读取
-        if (startLine !== undefined) {
-          const start = Math.max(1, startLine);
-          // 限制最大读取行数
-          let end = endLine !== undefined 
-            ? Math.min(totalLines, endLine) 
-            : Math.min(totalLines, start + 199); // 默认读取 200 行
-          
-          // 确保不超过最大行数限制
-          if (end - start + 1 > MAX_LINES) {
-            end = start + MAX_LINES - 1;
-          }
-          
-          // 提取指定行范围的内容（带行号）
-          const selectedLines: string[] = [];
-          for (let i = start - 1; i < end && i < totalLines; i++) {
-            // 格式化行号，保持对齐
-            const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
-            selectedLines.push(`${lineNum} | ${lines[i]}`);
-          }
-          
-          // 应用字符数限制
-          const rawContent = selectedLines.join('\n');
-          const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
-          const actualEndLine = truncated 
-            ? start + contentText.split('\n').length - 1 
-            : Math.min(end, totalLines);
-          
-          return {
-            success: true,
-            result: {
-              content: contentText,
-              startLine: start,
-              endLine: actualEndLine,
-              totalLines,
-              hasMoreBefore: start > 1,
-              hasMoreAfter: actualEndLine < totalLines,
-              ...(truncated ? { note: `内容已截断，请使用 startLine/endLine 参数分段读取` } : {}),
-              ...(section === "all" || section === "title" ? { title: context.title } : {}),
-            }
+        if (section === "title") {
+          return { success: true, result: { title: context.title, totalLines } };
+        }
+        
+        if (startLine === undefined || endLine === undefined) {
+          return { 
+            success: false, 
+            error: `必须指定 startLine 和 endLine 参数。文章共 ${totalLines} 行，建议每次读取 100-200 行。` 
           };
         }
         
-        // 不指定行范围时的默认模式（限制最大 2000 行和字符数）
-        switch (section) {
-          case "title":
-            return { success: true, result: { title: context.title } };
-          case "content": {
-            // 限制最大读取行数
-            const linesToRead = Math.min(totalLines, MAX_LINES);
-            const numberedLines = lines.slice(0, linesToRead).map((line, i) => {
-              const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
-              return `${lineNum} | ${line}`;
-            });
-            
-            // 应用字符数限制
-            const rawContent = numberedLines.join('\n');
-            const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
-            const actualEndLine = truncated 
-              ? contentText.split('\n').length 
-              : linesToRead;
-            
-            return { 
-              success: true, 
-              result: { 
-                content: contentText,
-                totalLines,
-                startLine: 1,
-                endLine: actualEndLine,
-                hasMoreAfter: actualEndLine < totalLines,
-                ...(truncated ? { note: `内容已截断，请使用 startLine/endLine 参数分段读取` } : {}),
-              } 
-            };
-          }
-          default: {
-            // all: 返回标题和带行号的内容（限制最大 2000 行和字符数）
-            const linesToRead = Math.min(totalLines, MAX_LINES);
-            const numberedLines = lines.slice(0, linesToRead).map((line, i) => {
-              const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
-              return `${lineNum} | ${line}`;
-            });
-            
-            // 应用字符数限制
-            const rawContent = numberedLines.join('\n');
-            const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
-            const actualEndLine = truncated 
-              ? contentText.split('\n').length 
-              : linesToRead;
-            
-            return {
-              success: true,
-              result: {
-                title: context.title,
-                content: contentText,
-                totalLines,
-                startLine: 1,
-                endLine: actualEndLine,
-                hasMoreAfter: actualEndLine < totalLines,
-                ...(truncated ? { note: `内容已截断，请使用 startLine/endLine 参数分段读取` } : {}),
-              }
-            };
-          }
+        const start = Math.max(1, startLine);
+        let end = Math.min(totalLines, endLine);
+        
+        // 确保不超过最大行数限制
+        if (end - start + 1 > MAX_LINES) {
+          end = start + MAX_LINES - 1;
         }
+        
+        // 提取指定行范围的内容（带行号）
+        const selectedLines: string[] = [];
+        for (let i = start - 1; i < end && i < totalLines; i++) {
+          // 格式化行号，保持对齐
+          const lineNum = String(i + 1).padStart(String(totalLines).length, ' ');
+          selectedLines.push(`${lineNum} | ${lines[i]}`);
+        }
+        
+        // 应用字符数限制
+        const rawContent = selectedLines.join('\n');
+        const { text: contentText, truncated } = truncateContent(rawContent, MAX_CHARS);
+        const actualEndLine = truncated 
+          ? start + contentText.split('\n').length - 1 
+          : Math.min(end, totalLines);
+        
+        return {
+          success: true,
+          result: {
+            content: contentText,
+            startLine: start,
+            endLine: actualEndLine,
+            totalLines,
+            hasMoreBefore: start > 1,
+            hasMoreAfter: actualEndLine < totalLines,
+            ...(truncated ? { note: `内容已截断至 ${actualEndLine} 行，请继续读取后续内容` } : {}),
+            ...(section === "all" ? { title: context.title } : {}),
+          }
+        };
       }
 
       case "update_title": {
@@ -215,13 +159,25 @@ export async function executeFrontendTool(
         if (!args.content) {
           return { success: false, error: "缺少 content 参数" };
         }
-        const position = args.position || "end";
+        
+        const lines = context.content.split('\n');
+        const totalLines = lines.length;
+        const afterLine = args.afterLine as number | undefined;
+        
         let newContent: string;
-
-        if (position === "start") {
+        let insertPosition: string;
+        
+        if (afterLine === 0) {
           newContent = args.content + "\n\n" + context.content;
-        } else {
+          insertPosition = "开头";
+        } else if (afterLine === undefined || afterLine >= totalLines) {
           newContent = context.content + "\n\n" + args.content;
+          insertPosition = "末尾";
+        } else {
+          const beforeLines = lines.slice(0, afterLine);
+          const afterLines = lines.slice(afterLine);
+          newContent = beforeLines.join('\n') + "\n\n" + args.content + "\n\n" + afterLines.join('\n');
+          insertPosition = `第 ${afterLine} 行后`;
         }
 
         // 返回待确认的变更
@@ -231,7 +187,8 @@ export async function executeFrontendTool(
           result: {
             message: `内容插入待确认`,
             requiresConfirmation: true,
-            position,
+            insertPosition,
+            afterLine: afterLine ?? totalLines,
           },
           pendingChange: {
             id: toolCallId,
@@ -240,8 +197,7 @@ export async function executeFrontendTool(
             operation: "insert",
             oldValue: context.content,
             newValue: newContent,
-            description: `在${position === "start" ? "开头" : "末尾"}插入 ${args.content.length} 字符的内容`,
-            position,
+            description: `在${insertPosition}插入 ${args.content.length} 字符的内容`,
           },
         };
       }
@@ -314,6 +270,7 @@ export async function executeFrontendTool(
               : `替换匹配的内容`,
             searchText: args.search,
             replaceText: args.replace,
+            replaceAll: useReplaceAll,
             skipDiff: diffCheck.shouldSkip,
           },
         };
@@ -408,12 +365,8 @@ export async function executeToolCalls(
         // 如果需要审核，添加到待确认列表
         if (needsApproval) {
           pendingChanges.push(result.pendingChange);
-
-          // 更新 context.content 为新值，使后续工具调用基于最新内容
-          // 这解决了同一轮对话中多个 replace_content 调用时，后面的替换会覆盖前面替换的 bug
-          if (result.pendingChange.type === 'content' && result.pendingChange.newValue) {
-            context.content = result.pendingChange.newValue;
-          }
+          // 注意：不再提前更新 context.content，改为在用户接受变更时基于当前内容重新计算
+          // 这避免了用户拒绝前一个替换时，后续替换结果错误的问题（镜像替换错误）
 
           results.push({
             ...toolCall,

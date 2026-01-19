@@ -10,6 +10,7 @@ import type {
   FrontendToolContext,
 } from "../types";
 import { applyPendingChange } from "../tools/frontendTools";
+import { exactReplace } from "../tools/stringMatcher";
 import type { MessageContent } from "../tools/toolResultFormatter";
 
 interface UsePendingChangesOptions {
@@ -114,28 +115,58 @@ export function usePendingChanges(
   const acceptPendingChange = useCallback(async (change: PendingChange) => {
     console.log('[acceptPendingChange] 开始处理变更:', change.id, 'isReadOnly:', change.isReadOnly);
     
-    let toolResult: string;
+    let toolResult = '';
     let applySuccess = true;
     let applyError: string | undefined;
+    let finalChange = change;
     
     // 只读审批：不应用变更，直接返回工具执行的实际结果
     if (change.isReadOnly) {
       toolResult = change.newValue;
     } else {
-      // 写入操作：应用变更
-      const result = applyPendingChange(change, toolContext);
-      applySuccess = result.success;
-      applyError = result.error;
-      
-      toolResult = result.success
-        ? JSON.stringify({ 
-            message: change.type === "title" ? "标题已更新" : "内容已更新",
-            accepted: true,
-          })
-        : JSON.stringify({ 
-            message: "应用变更失败",
-            error: result.error,
+      // 对于 replace 操作，基于当前实际内容重新计算替换结果
+      // 这避免了镜像替换错误：当用户拒绝前一个替换时，后续替换应该基于当前内容
+      if (change.operation === 'replace' && change.searchText !== undefined) {
+        const currentContent = toolContext.content;
+        const replaceResult = exactReplace(
+          currentContent,
+          change.searchText,
+          change.replaceText || '',
+          { replaceAll: change.replaceAll }
+        );
+        
+        if (replaceResult.success && replaceResult.newContent) {
+          finalChange = {
+            ...change,
+            oldValue: currentContent,
+            newValue: replaceResult.newContent,
+          };
+        } else {
+          applySuccess = false;
+          applyError = replaceResult.error || '替换失败，目标内容可能已变化';
+          toolResult = JSON.stringify({ 
+            message: "替换失败",
+            error: applyError,
           });
+        }
+      }
+      
+      // 写入操作：应用变更
+      if (applySuccess) {
+        const result = applyPendingChange(finalChange, toolContext);
+        applySuccess = result.success;
+        applyError = result.error;
+        
+        toolResult = result.success
+          ? JSON.stringify({ 
+              message: change.type === "title" ? "标题已更新" : "内容已更新",
+              accepted: true,
+            })
+          : JSON.stringify({ 
+              message: "应用变更失败",
+              error: result.error,
+            });
+      }
     }
     
     // 保存此工具调用的结果
@@ -171,8 +202,8 @@ export function usePendingChanges(
       })));
     }
     
-    // 从待确认列表中移除
-    const remaining = pendingChanges.filter(c => c.id !== change.id);
+    // 从待确认列表中移除（使用 ref 获取最新值，避免闭包陷阱）
+    const remaining = pendingChangesRef.current.filter(c => c.id !== change.id);
     
     setPendingChanges(remaining);
     setCurrentPendingChange(remaining[0] || null);
@@ -181,7 +212,7 @@ export function usePendingChanges(
     if (remaining.length === 0 && pausedStateRef.current) {
       await handleAllChangesProcessed();
     }
-  }, [toolContext, pendingChanges, setMessages, handleAllChangesProcessed]);
+  }, [toolContext, setMessages, handleAllChangesProcessed]);
   
   // 拒绝待确认的变更
   const rejectPendingChange = useCallback(async (change: PendingChange) => {
@@ -208,8 +239,8 @@ export function usePendingChanges(
       ),
     })));
     
-    // 从待确认列表中移除
-    const remaining = pendingChanges.filter(c => c.id !== change.id);
+    // 从待确认列表中移除（使用 ref 获取最新值，避免闭包陷阱）
+    const remaining = pendingChangesRef.current.filter(c => c.id !== change.id);
     setPendingChanges(remaining);
     setCurrentPendingChange(remaining[0] || null);
     
@@ -217,7 +248,7 @@ export function usePendingChanges(
     if (remaining.length === 0 && pausedStateRef.current) {
       await handleAllChangesProcessed();
     }
-  }, [pendingChanges, setMessages, handleAllChangesProcessed]);
+  }, [setMessages, handleAllChangesProcessed]);
   
   // 重置所有待确认状态
   const resetPendingState = useCallback(() => {

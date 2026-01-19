@@ -37,13 +37,15 @@ const WEB_URL = process.env.WEB_URL || "http://localhost:5173";
 const isDev = !app.isPackaged;
 
 function createMainWindow() {
+  const isMac = process.platform === "darwin";
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     frame: false, // 无边框窗口
-    titleBarStyle: "hidden", // 隐藏标题栏
+    titleBarStyle: isMac ? "hiddenInset" : "hidden", // macOS 使用 hiddenInset 保留原生按钮
     show: false, // 先不显示，等加载完成后再显示
     icon: path.join(__dirname, "../assets/icon.ico"), // 窗口图标
     webPreferences: {

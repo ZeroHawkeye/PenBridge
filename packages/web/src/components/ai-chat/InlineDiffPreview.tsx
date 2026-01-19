@@ -4,7 +4,7 @@
  * 使用类似 GitHub 的 diff 展示风格
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -46,6 +46,15 @@ export function InlineDiffPreview({
 }: InlineDiffPreviewProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 用于跟踪组件是否已挂载，防止组件卸载后更新状态
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // 检查是否应该跳过 Diff 计算
   const shouldSkipDiff = pendingChange.skipDiff ?? false;
@@ -77,23 +86,25 @@ export function InlineDiffPreview({
     totalChangedCharacters: Math.abs(changeSummary.addedChars) + changeSummary.removedChars,
   };
 
-  // 处理接受
   const handleAccept = async () => {
     setIsProcessing(true);
     try {
       await onAccept(pendingChange);
     } finally {
-      setIsProcessing(false);
+      if (isMountedRef.current) {
+        setIsProcessing(false);
+      }
     }
   };
 
-  // 处理拒绝
   const handleReject = async () => {
     setIsProcessing(true);
     try {
       await onReject(pendingChange);
     } finally {
-      setIsProcessing(false);
+      if (isMountedRef.current) {
+        setIsProcessing(false);
+      }
     }
   };
 

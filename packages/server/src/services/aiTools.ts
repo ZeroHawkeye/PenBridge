@@ -46,10 +46,10 @@ export const frontendToolDefinitions: ToolDefinition[] = [
       name: "read_article",
       description: `读取当前正在编辑的文章内容。
 
-- 默认从文章开头读取最多 2000 行
-- 可以通过 startLine 和 endLine 参数指定行范围进行分页读取
+- 必须指定 startLine 和 endLine 参数来读取指定行范围
 - 返回结果包含行号信息，格式为"行号 | 内容"
-- 超过 2000 行的内容需要使用 startLine/endLine 分页读取`,
+- 建议每次读取 100-200 行，避免内容过长
+- 首次读取建议从第 1 行开始，根据返回的 totalLines 判断是否需要继续读取`,
       parameters: {
         type: "object",
         properties: {
@@ -61,14 +61,14 @@ export const frontendToolDefinitions: ToolDefinition[] = [
           },
           startLine: {
             type: "integer",
-            description: "起始行号（从 1 开始，包含）",
+            description: "起始行号（从 1 开始，包含），必填",
           },
           endLine: {
             type: "integer",
-            description: "结束行号（包含）。不指定则默认读取 200 行",
+            description: "结束行号（包含），必填。建议每次读取 100-200 行",
           },
         },
-        required: [],
+        required: ["startLine", "endLine"],
       },
     },
     executionLocation: "frontend",
@@ -95,21 +95,25 @@ export const frontendToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "insert_content",
-      description: "在文章指定位置插入内容",
+      description: `在文章指定行后插入内容。
+
+- afterLine: 在第 N 行之后插入内容
+- afterLine 为 0 时，在文章开头插入
+- afterLine 省略或超出总行数时，在文章末尾插入
+- 建议先使用 read_article 获取行号信息，再精确插入`,
       parameters: {
         type: "object",
         properties: {
-          position: {
-            type: "string",
-            description: "插入位置",
-            enum: ["start", "end"],
+          afterLine: {
+            type: "integer",
+            description: "在第 N 行之后插入（0 表示开头，省略表示末尾）",
           },
           content: {
             type: "string",
             description: "要插入的 Markdown 内容",
           },
         },
-        required: ["position", "content"],
+        required: ["content"],
       },
     },
     executionLocation: "frontend",

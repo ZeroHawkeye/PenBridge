@@ -170,6 +170,8 @@ export interface PendingChange {
   // 对于 replace 操作，记录搜索和替换的内容
   searchText?: string;
   replaceText?: string;
+  // 对于 replace 操作，是否替换所有匹配
+  replaceAll?: boolean;
   position?: "start" | "end";
   // 性能优化：对于大文件跳过 Diff 计算
   skipDiff?: boolean;
