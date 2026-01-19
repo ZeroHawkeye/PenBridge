@@ -738,7 +738,7 @@ export class TencentApiClient {
         "Content-Length": imageBuffer.length.toString(),
         Host: `${uploadInfo.bucket}.cos.${uploadInfo.region}.myqcloud.com`,
       },
-      body: imageBuffer,
+      body: new Uint8Array(imageBuffer),
     });
 
     if (!response.ok) {

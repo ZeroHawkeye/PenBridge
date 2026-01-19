@@ -7,7 +7,7 @@ import { AppDataSource } from "../db";
 import { User } from "../entities/User";
 import { Article, ArticleStatus } from "../entities/Article";
 import { Folder } from "../entities/Folder";
-import { AdminUser } from "../entities/AdminUser";
+import { AdminUser, AdminRole } from "../entities/AdminUser";
 import { AIProvider, AIModel } from "../entities/AIProvider";
 import { EmailConfig } from "../entities/EmailConfig";
 import { ScheduledTask, TaskStatus, Platform } from "../entities/ScheduledTask";
@@ -26,7 +26,7 @@ import type {
   ExportedImage,
   ImportOptions,
   ImportResult,
-} from "../../shared/types";
+} from "@shared/types";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -37,26 +37,22 @@ import { getUploadDir } from "./dataDir";
 const DATA_FORMAT_VERSION = "1.0.0";
 const APP_VERSION = "1.0.0"; // TODO: 从 package.json 读取
 
-/**
- * 加密工具函数
- */
 function encrypt(text: string, password: string): string {
   const salt = randomBytes(16);
-  const key = scryptSync(password, salt, 32);
+  const key = scryptSync(password, new Uint8Array(salt), 32);
   const iv = randomBytes(16);
-  const cipher = createCipheriv("aes-256-cbc", key, iv);
+  const cipher = createCipheriv("aes-256-cbc", new Uint8Array(key), new Uint8Array(iv));
   let encrypted = cipher.update(text, "utf8", "hex");
   encrypted += cipher.final("hex");
-  // 返回格式: salt:iv:encrypted
   return `${salt.toString("hex")}:${iv.toString("hex")}:${encrypted}`;
 }
 
 function decrypt(encryptedText: string, password: string): string {
   const [saltHex, ivHex, encrypted] = encryptedText.split(":");
-  const salt = Buffer.from(saltHex, "hex");
-  const iv = Buffer.from(ivHex, "hex");
+  const salt = new Uint8Array(Buffer.from(saltHex, "hex"));
+  const iv = new Uint8Array(Buffer.from(ivHex, "hex"));
   const key = scryptSync(password, salt, 32);
-  const decipher = createDecipheriv("aes-256-cbc", key, iv);
+  const decipher = createDecipheriv("aes-256-cbc", new Uint8Array(key), iv);
   let decrypted = decipher.update(encrypted, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
@@ -226,7 +222,7 @@ export async function exportData(options: ExportOptions): Promise<ExportData> {
         baseUrl: provider.baseUrl,
         enabled: provider.enabled,
         order: provider.order,
-        apiType: provider.apiType,
+        sdkType: provider.sdkType,
         createdAt: provider.createdAt.toISOString(),
         updatedAt: provider.updatedAt.toISOString(),
       };
@@ -304,7 +300,7 @@ export async function exportData(options: ExportOptions): Promise<ExportData> {
       articleId: task.articleId,
       userId: task.userId,
       platform: task.platform as "tencent" | "juejin" | "csdn",
-      config: task.config as Record<string, unknown>,
+      config: task.config as unknown as Record<string, unknown>,
       scheduledAt: task.scheduledAt.toISOString(),
       status: task.status as "pending" | "running" | "success" | "failed" | "cancelled",
       errorMessage: task.errorMessage,
@@ -565,7 +561,7 @@ export async function importData(
           if (adminData.passwordHash) {
             newAdmin.passwordHash = tryDecrypt(adminData.passwordHash) || adminData.passwordHash;
           }
-          newAdmin.role = adminData.role as "super_admin" | "admin";
+          newAdmin.role = adminData.role as AdminRole;
           newAdmin.lastLoginAt = stringToDate(adminData.lastLoginAt);
 
           await adminUserRepo.save(newAdmin);
@@ -605,7 +601,7 @@ export async function importData(
             }
             newProvider.enabled = providerData.enabled;
             newProvider.order = providerData.order;
-            newProvider.apiType = providerData.apiType;
+            newProvider.sdkType = providerData.sdkType;
 
             const savedProvider = await providerRepo.save(newProvider);
             providerIdMap.set(providerData.id, savedProvider.id);
@@ -770,7 +766,7 @@ export async function importData(
           
           // 将 Base64 数据解码并写入文件
           const fileBuffer = Buffer.from(imageData.data, "base64");
-          fs.writeFileSync(filePath, fileBuffer);
+          fs.writeFileSync(filePath, new Uint8Array(fileBuffer));
           
           result.stats.images.imported++;
         } catch (e) {
@@ -950,7 +946,7 @@ export async function exportDataToZip(options: ExportOptions): Promise<Buffer> {
                 if (fileStat.isFile()) {
                   // 读取文件并添加到 ZIP
                   const fileContent = fs.readFileSync(filePath);
-                  zip.file(`uploads/${articleIdStr}/${fileName}`, fileContent);
+                  zip.file(`uploads/${articleIdStr}/${fileName}`, new Uint8Array(fileContent));
                 }
               } catch (e) {
                 console.error(`添加图片到 ZIP 失败: ${fileName}`, e);
@@ -1000,7 +996,7 @@ export async function importDataFromZip(
 
   try {
     // 1. 解压 ZIP
-    const zip = await JSZip.loadAsync(zipBuffer);
+    const zip = await JSZip.loadAsync(new Uint8Array(zipBuffer));
 
     // 2. 读取 data.json
     const dataJsonFile = zip.file("data.json");
@@ -1093,7 +1089,7 @@ export async function importDataFromZip(
           const file = zip.file(filePath);
           if (file) {
             const content = await file.async("nodebuffer");
-            fs.writeFileSync(targetPath, content);
+            fs.writeFileSync(targetPath, new Uint8Array(content));
             result.stats.images.imported++;
           }
         } catch (e) {
@@ -1168,7 +1164,7 @@ export async function previewZipData(
   };
 }> {
   try {
-    const zip = await JSZip.loadAsync(zipBuffer);
+    const zip = await JSZip.loadAsync(new Uint8Array(zipBuffer));
 
     // 读取 data.json
     const dataJsonFile = zip.file("data.json");

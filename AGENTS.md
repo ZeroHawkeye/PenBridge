@@ -11,6 +11,7 @@ PenBridge 是一个多平台文章管理与发布工具，支持：
 - 定时发布功能
 - AI 辅助写作（支持 OpenAI 兼容 API、GitHub Copilot）
 - 数据导入导出（支持加密）
+- 所有Agent产物存储到plan目录中
 
 ## 技术栈
 

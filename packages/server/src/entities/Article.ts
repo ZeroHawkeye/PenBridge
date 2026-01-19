@@ -141,6 +141,44 @@ export class Article {
   @Column({ default: 0 })
   order!: number; // 在文件夹内的排序顺序
 
+  // ========== 本地缓存与同步相关字段 ==========
+
+  @Column({ type: "text", nullable: true })
+  clientId?: string; // 客户端生成的 UUID，用于离线创建的文章
+
+  @Column({ default: 1 })
+  localVersion!: number; // 本地版本号，每次保存递增
+
+  @Column({ nullable: true })
+  remoteVersion?: number; // 云端版本号（从平台同步回来）
+
+  @Column({ type: "text", nullable: true })
+  contentHash?: string; // 内容哈希，用于快速比对
+
+  @Column({ type: "text", nullable: true })
+  remoteContentHash?: string; // 云端内容哈希（用于检测变化）
+
+  @Column({ type: "text", nullable: true })
+  lastModifiedBy?: string; // 最后修改的设备 ID
+
+  @Column({ nullable: true })
+  serverUpdatedAt?: Date; // 服务器确认的更新时间
+
+  @Column({ default: false })
+  hasConflict!: boolean; // 是否存在冲突
+
+  @Column({ type: "text", nullable: true })
+  conflictRemoteContent?: string; // 冲突时保存的云端内容
+
+  @Column({ nullable: true })
+  conflictDetectedAt?: Date; // 冲突检测时间
+
+  @Column({ type: "text", default: "synced" })
+  syncStatus!: string; // 同步状态: synced | pending | syncing | conflict | error
+
+  @Column({ type: "text", nullable: true })
+  syncError?: string; // 同步错误信息
+
   @CreateDateColumn()
   createdAt!: Date;
 

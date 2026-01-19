@@ -1,6 +1,7 @@
 import { DataSource } from "typeorm";
 import { User } from "../entities/User";
 import { Article } from "../entities/Article";
+import { ArticleVersion } from "../entities/ArticleVersion";
 import { Folder } from "../entities/Folder";
 import { ScheduledTask } from "../entities/ScheduledTask";
 import { EmailConfig } from "../entities/EmailConfig";
@@ -120,7 +121,7 @@ const createDebouncedSave = () => (data: Uint8Array) => {
   }
   saveTimeout = setTimeout(() => {
     if (pendingData) {
-      writeFileSync(DB_PATH, Buffer.from(pendingData));
+      writeFileSync(DB_PATH, new Uint8Array(pendingData));
       pendingData = null;
     }
     saveTimeout = null;
@@ -145,12 +146,13 @@ async function createDataSource(): Promise<DataSource> {
   
   const driver = await initSqlJs(initOptions);
   
+  const dbFile = existsSync(DB_PATH) ? readFileSync(DB_PATH) : undefined;
   return new DataSource({
     type: "sqljs",
-    database: existsSync(DB_PATH) ? readFileSync(DB_PATH) : undefined,
-    synchronize: true, // 自动迁移数据模型
+    database: dbFile ? new Uint8Array(dbFile) : undefined,
+    synchronize: true,
     logging: false,
-    entities: [User, Article, Folder, ScheduledTask, EmailConfig, AdminUser, AdminSession, AIProvider, AIModel, AIChatSession, AIChatMessage, CopilotAuth],
+    entities: [User, Article, ArticleVersion, Folder, ScheduledTask, EmailConfig, AdminUser, AdminSession, AIProvider, AIModel, AIChatSession, AIChatMessage, CopilotAuth],
     driver,
     autoSave: true,
     autoSaveCallback: createDebouncedSave(),

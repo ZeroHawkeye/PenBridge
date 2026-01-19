@@ -1052,12 +1052,12 @@ export class JuejinApiClient {
 
     // 计算签名密钥
     const kDate = crypto.createHmac("sha256", "AWS4" + secretAccessKey).update(dateStamp).digest();
-    const kRegion = crypto.createHmac("sha256", kDate).update(region).digest();
-    const kService = crypto.createHmac("sha256", kRegion).update(service).digest();
-    const kSigning = crypto.createHmac("sha256", kService).update("aws4_request").digest();
+    const kRegion = crypto.createHmac("sha256", new Uint8Array(kDate)).update(region).digest();
+    const kService = crypto.createHmac("sha256", new Uint8Array(kRegion)).update(service).digest();
+    const kSigning = crypto.createHmac("sha256", new Uint8Array(kService)).update("aws4_request").digest();
 
     // 计算签名
-    const signature = crypto.createHmac("sha256", kSigning).update(stringToSign).digest("hex");
+    const signature = crypto.createHmac("sha256", new Uint8Array(kSigning)).update(stringToSign).digest("hex");
 
     // 构建 Authorization 头
     const authorization = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;

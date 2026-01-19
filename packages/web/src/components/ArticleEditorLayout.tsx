@@ -15,6 +15,8 @@ import {
   Search,
   MoreHorizontal,
 } from "lucide-react";
+import { SyncConflictBanner } from "@/components/SyncConflictBanner";
+import { useSyncConflict } from "@/hooks/use-sync-conflict";
 import { Drawer } from "antd";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -93,8 +95,11 @@ export interface ArticleEditorLayoutProps {
   // 可选：编辑器 key（用于强制重新渲染）
   editorKey?: number;
 
-  // 可选：文章 ID（用于图片上传）
+  // 可选：文章 ID（用于图片上传和冲突检测）
   articleId?: number;
+
+  // 可选：使用云端版本后重新加载内容的回调
+  onContentReload?: () => void;
 }
 
 export function ArticleEditorLayout({
@@ -111,9 +116,26 @@ export function ArticleEditorLayout({
   titleInputRef: externalTitleInputRef,
   editorKey,
   articleId,
+  onContentReload,
 }: ArticleEditorLayoutProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  const {
+    hasConflict,
+    remoteUpdatedAt,
+    isResolving,
+    dismissConflict,
+    useLocalVersion,
+    useRemoteVersion,
+  } = useSyncConflict(articleId);
+
+  const handleUseRemoteVersion = useCallback(async () => {
+    const success = await useRemoteVersion();
+    if (success && onContentReload) {
+      onContentReload();
+    }
+  }, [useRemoteVersion, onContentReload]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileTocOpen, setMobileTocOpen] = useState(false);
   const [mobileAIOpen, setMobileAIOpen] = useState(false);
@@ -536,6 +558,17 @@ export function ArticleEditorLayout({
           )}
         </div>
       </div>
+
+      {/* 冲突警告条 */}
+      {hasConflict && (
+        <SyncConflictBanner
+          remoteUpdatedAt={remoteUpdatedAt}
+          isResolving={isResolving}
+          onUseLocal={useLocalVersion}
+          onUseRemote={handleUseRemoteVersion}
+          onDismiss={dismissConflict}
+        />
+      )}
       
       {/* 设置抽屉 - 放在最外层，使用 antd Drawer 避免 Portal 影响编辑器 */}
       <Drawer

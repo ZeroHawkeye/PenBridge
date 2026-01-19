@@ -3,6 +3,7 @@ import { t, protectedProcedure } from "../shared";
 import { AppDataSource } from "../../db";
 import { Article, ArticleStatus } from "../../entities/Article";
 import { cleanupUnusedImages, deleteAllArticleImages } from "../../services/imageCleanup";
+import { syncConflictDetector } from "../../services/syncConflictDetector";
 
 // 文章相关路由
 export const articleRouter = t.router({
@@ -118,6 +119,10 @@ export const articleRouter = t.router({
         scheduledAt: z.string().datetime().nullish(),
         tencentTagIds: z.array(z.number()).nullish(),
         sourceType: z.number().min(1).max(3).nullish(),
+        // 同步相关字段
+        clientId: z.string().nullish(),
+        contentHash: z.string().nullish(),
+        lastModifiedBy: z.string().nullish(),
       })
     )
     .mutation(async ({ input }) => {
@@ -137,6 +142,14 @@ export const articleRouter = t.router({
         ? new Date(input.scheduledAt)
         : undefined;
       article.userId = 1; // 简化处理
+      
+      // 同步相关字段
+      if (input.clientId) article.clientId = input.clientId;
+      if (input.contentHash) article.contentHash = input.contentHash;
+      if (input.lastModifiedBy) article.lastModifiedBy = input.lastModifiedBy;
+      article.localVersion = 1;
+      article.syncStatus = "synced";
+      article.serverUpdatedAt = new Date();
 
       await articleRepo.save(article);
       return article;
@@ -152,11 +165,15 @@ export const articleRouter = t.router({
         summary: z.string().nullish(),
         tags: z.array(z.string()).nullish(),
         scheduledAt: z.string().datetime().nullish(),
+        clientId: z.string().nullish(),
+        contentHash: z.string().nullish(),
+        lastModifiedBy: z.string().nullish(),
+        localVersion: z.number().nullish(),
       })
     )
     .mutation(async ({ input }) => {
       const articleRepo = AppDataSource.getRepository(Article);
-      const { id, title, content, summary, tags, scheduledAt } = input;
+      const { id, title, content, summary, tags, scheduledAt, clientId, contentHash, lastModifiedBy, localVersion } = input;
 
       const updateData: Partial<Article> = {};
       if (title !== null && title !== undefined) updateData.title = title;
@@ -167,12 +184,18 @@ export const articleRouter = t.router({
       if (tags !== null && tags !== undefined) updateData.tags = tags;
       if (scheduledAt !== null && scheduledAt !== undefined)
         updateData.scheduledAt = new Date(scheduledAt);
+      
+      if (clientId !== null && clientId !== undefined) updateData.clientId = clientId;
+      if (contentHash !== null && contentHash !== undefined) updateData.contentHash = contentHash;
+      if (lastModifiedBy !== null && lastModifiedBy !== undefined) updateData.lastModifiedBy = lastModifiedBy;
+      if (localVersion !== null && localVersion !== undefined) updateData.localVersion = localVersion;
+      
+      updateData.serverUpdatedAt = new Date();
+      updateData.syncStatus = "synced";
 
       await articleRepo.update(id, updateData);
 
-      // 如果更新了内容，异步清理未引用的图片
       if (content !== null && content !== undefined) {
-        // 使用 setImmediate 异步执行，不阻塞响应
         setImmediate(() => {
           cleanupUnusedImages(id, content).catch((err) => {
             console.error(`[Router] 清理文章 ${id} 图片失败:`, err);
@@ -181,6 +204,73 @@ export const articleRouter = t.router({
       }
 
       return articleRepo.findOne({ where: { id } });
+    }),
+  
+  // 同步更新（带冲突检测）
+  syncUpdate: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        title: z.string().min(1),
+        content: z.string().min(1),
+        summary: z.string().nullish(),
+        clientId: z.string(),
+        contentHash: z.string(),
+        lastModifiedBy: z.string(),
+        localVersion: z.number(),
+        baseVersion: z.number().nullish(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const articleRepo = AppDataSource.getRepository(Article);
+      const { id, title, content, summary, clientId, contentHash, lastModifiedBy, localVersion, baseVersion } = input;
+
+      const existing = await articleRepo.findOne({ where: { id } });
+      if (!existing) {
+        throw new Error("文章不存在");
+      }
+
+      if (baseVersion !== null && baseVersion !== undefined && existing.localVersion > baseVersion) {
+        if (existing.contentHash && existing.contentHash !== contentHash) {
+          await syncConflictDetector.markConflict(id, existing.content, existing.title, existing.localVersion);
+          return {
+            success: false,
+            conflict: true,
+            serverVersion: existing.localVersion,
+            serverContentHash: existing.contentHash,
+          };
+        }
+      }
+
+      const updateData: Partial<Article> = {
+        title,
+        content,
+        summary: summary ?? undefined,
+        clientId,
+        contentHash,
+        lastModifiedBy,
+        localVersion,
+        serverUpdatedAt: new Date(),
+        syncStatus: "synced",
+        hasConflict: false,
+        conflictRemoteContent: undefined,
+        conflictDetectedAt: undefined,
+      };
+
+      await articleRepo.update(id, updateData);
+
+      setImmediate(() => {
+        cleanupUnusedImages(id, content).catch((err) => {
+          console.error(`[Router] 清理文章 ${id} 图片失败:`, err);
+        });
+      });
+
+      const updated = await articleRepo.findOne({ where: { id } });
+      return {
+        success: true,
+        conflict: false,
+        article: updated,
+      };
     }),
 
   // 删除文章

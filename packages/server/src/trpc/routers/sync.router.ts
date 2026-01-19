@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { t, protectedProcedure, wrapPlatformCall } from "../shared";
 import { articleSyncService } from "../../services/articleSync";
+import { syncConflictDetector } from "../../services/syncConflictDetector";
 
 // 同步相关路由 - 使用 API 直接调用
 export const syncRouter = t.router({
@@ -108,4 +109,51 @@ export const syncRouter = t.router({
   fetchRejectedArticles: protectedProcedure.query(async () => {
     return wrapPlatformCall(() => articleSyncService.fetchRejectedArticles());
   }),
+
+  // ========== 本地缓存冲突检测相关 ==========
+
+  checkConflict: protectedProcedure
+    .input(z.object({ articleId: z.number() }))
+    .query(async ({ input }) => {
+      return syncConflictDetector.checkConflict(input.articleId);
+    }),
+
+  resolveConflict: protectedProcedure
+    .input(
+      z.object({
+        articleId: z.number(),
+        resolution: z.enum(["local", "remote"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return syncConflictDetector.resolveConflict(input);
+    }),
+
+  updateSyncStatus: protectedProcedure
+    .input(
+      z.object({
+        articleId: z.number(),
+        status: z.string(),
+        error: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await syncConflictDetector.updateSyncStatus(
+        input.articleId,
+        input.status,
+        input.error
+      );
+      return { success: true };
+    }),
+
+  getVersionHistory: protectedProcedure
+    .input(
+      z.object({
+        articleId: z.number(),
+        limit: z.number().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return syncConflictDetector.getVersionHistory(input.articleId, input.limit);
+    }),
 });

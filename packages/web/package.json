@@ -38,6 +38,8 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
+    "dexie": "^4.2.1",
+    "dexie-react-hooks": "^4.2.0",
     "dictionary-en": "^4.0.0",
     "diff": "^8.0.2",
     "lucide-react": "^0.562.0",
@@ -51,6 +53,7 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
+    "uuid": "^13.0.0",
     "vditor": "workspace:*",
     "word-to-markdown": "github:benbalter/word-to-markdown-js",
     "zod": "^4.2.1"

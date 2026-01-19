@@ -122,8 +122,12 @@ export function EditorSearchBox({ isOpen, onClose, containerRef, initialSearchTe
     }
 
     const container = containerRef.current;
-    // 获取编辑器内容区域
-    const editor = container.querySelector(".ProseMirror") 
+    // 获取编辑器内容区域 - 支持 Vditor 三种模式和旧版 Milkdown/ProseMirror
+    const editor = container.querySelector(".vditor-ir")           // Vditor 即时渲染模式
+      || container.querySelector(".vditor-wysiwyg")                // Vditor 所见即所得模式
+      || container.querySelector(".vditor-sv")                     // Vditor 分屏预览模式
+      || container.querySelector(".vditor")                        // Vditor 容器
+      || container.querySelector(".ProseMirror")                   // ProseMirror (保留兼容)
       || container.querySelector(".milkdown")
       || container.querySelector(".milkdown-editor");
     

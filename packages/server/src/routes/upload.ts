@@ -67,8 +67,7 @@ export function createUploadRouter(uploadDir?: string) {
 
       // 读取文件内容并保存
       const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      writeFileSync(filePath, buffer);
+      writeFileSync(filePath, new Uint8Array(arrayBuffer));
 
       // 返回图片 URL
       const imageUrl = `/uploads/${articleId}/${fileName}`;
@@ -158,11 +157,12 @@ export function createUploadRouter(uploadDir?: string) {
 
           // 解码 base64
           const buffer = Buffer.from(data, "base64");
+          const uint8Array = new Uint8Array(buffer);
 
           // 限制文件大小（10MB）
           const maxSize = 10 * 1024 * 1024;
-          if (buffer.length > maxSize) {
-            console.error(`[批量上传] 文件大小超过限制: ${buffer.length} bytes`);
+          if (uint8Array.length > maxSize) {
+            console.error(`[批量上传] 文件大小超过限制: ${uint8Array.length} bytes`);
             continue;
           }
 
@@ -172,7 +172,7 @@ export function createUploadRouter(uploadDir?: string) {
           const filePath = join(articleDir, fileName);
 
           // 保存文件
-          writeFileSync(filePath, buffer);
+          writeFileSync(filePath, uint8Array);
 
           // 替换为相对路径
           const imageUrl = `/uploads/${articleId}/${fileName}`;

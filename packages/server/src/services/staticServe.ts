@@ -76,7 +76,7 @@ export function serveStatic(options: ServeStaticOptions) {
         const indexPath = join(filePath, "index.html");
         if (existsSync(indexPath)) {
           const content = readFileSync(indexPath);
-          return c.body(content, 200, {
+          return c.body(new Uint8Array(content), 200, {
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "no-cache",
           });
@@ -93,7 +93,7 @@ export function serveStatic(options: ServeStaticOptions) {
         ? "no-cache"
         : "public, max-age=31536000, immutable";
 
-      return c.body(content, 200, {
+      return c.body(new Uint8Array(content), 200, {
         "Content-Type": mimeType,
         "Cache-Control": cacheControl,
       });

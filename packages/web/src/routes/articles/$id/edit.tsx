@@ -1,15 +1,19 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { message } from "antd";
+import { message, Modal } from "antd";
 import dayjs from "dayjs";
-import { Save, Loader2, Check } from "lucide-react";
+import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/utils/trpc";
 import PublishMenu from "@/components/PublishMenu";
 import ArticleEditorLayout from "@/components/ArticleEditorLayout";
 import ImportWordSettings from "@/components/ImportWordSettings";
 import { ArticleEditSkeleton } from "@/components/ArticleEditSkeleton";
+import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
+import { useSyncConflict } from "@/hooks/use-sync-conflict";
 import { replaceBase64ImagesInMarkdown, convertToAbsoluteUrls, convertToRelativeUrls } from "@/utils/markdownImageUtils";
+import { simpleHash } from "@/utils/contentHash";
+import { syncManager } from "@/lib/syncManager";
 
 // 保存状态类型
 type SaveStatus = "idle" | "saving" | "saved";
@@ -29,6 +33,8 @@ function EditArticlePage() {
   const [scheduledAt, setScheduledAt] = useState<any>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | undefined>();
+  const { hasConflict, syncStatus: conflictSyncStatus } = useSyncConflict(Number(id));
   // 掘金相关状态
   const [juejinCategoryId, setJuejinCategoryId] = useState<string>("");
   const [juejinTagIds, setJuejinTagIds] = useState<string[]>([]);
@@ -83,18 +89,14 @@ function EditArticlePage() {
 
   const updateMutation = trpc.article.update.useMutation({
     onSuccess: () => {
-      // 刷新文件树以更新标题
       trpcUtils.folder.tree.invalidate();
-      // 刷新文章缓存，确保切换文章后再切换回来时显示最新内容
       trpcUtils.article.getMeta.invalidate({ id: Number(id) });
       trpcUtils.article.getContent.invalidate({ id: Number(id) });
-      // 更新保存状态为已保存
       setSaveStatus("saved");
-      // 清除之前的定时器
+      setSaveError(undefined);
       if (savedStatusTimerRef.current) {
         clearTimeout(savedStatusTimerRef.current);
       }
-      // 2秒后重置为 idle 状态
       savedStatusTimerRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 2000);
@@ -102,18 +104,15 @@ function EditArticlePage() {
     onError: (error: Error) => {
       message.error(`保存失败: ${error.message}`);
       setSaveStatus("idle");
+      setSaveError(error.message);
     },
   });
 
-  // 执行保存的函数
   const doSave = useCallback(
     async (titleToSave: string, contentToSave: string, summaryToSave: string) => {
-      // 如果标题为空，使用默认标题（后端要求 title 至少 1 个字符）
       const finalTitle = titleToSave?.trim() || "无标题";
-      // 如果内容为空，使用占位符（后端要求 content 至少 1 个字符）
       let finalContent = contentToSave?.trim() ? contentToSave : " ";
       
-      // 保存前：将 base64 图片替换为服务器 URL（避免下次加载时重复上传）
       if (finalContent.includes("data:image/")) {
         try {
           finalContent = await replaceBase64ImagesInMarkdown(finalContent, Number(id));
@@ -122,7 +121,6 @@ function EditArticlePage() {
         }
       }
       
-      // 保存前：将完整图片 URL 转换为相对路径（避免服务器地址变化导致图片失效）
       finalContent = convertToRelativeUrls(finalContent);
 
       setSaveStatus("saving");
@@ -133,6 +131,9 @@ function EditArticlePage() {
           content: finalContent,
           summary: summaryToSave || undefined,
           scheduledAt: scheduledAt?.toISOString(),
+          clientId: syncManager.getDeviceId() + "-" + Date.now(),
+          contentHash: simpleHash(finalContent),
+          lastModifiedBy: syncManager.getDeviceId(),
         });
       } catch {
         // 错误已在 onError 中处理
@@ -141,20 +142,36 @@ function EditArticlePage() {
     [id, scheduledAt, updateMutation]
   );
 
-  // 手动保存函数（Ctrl+S 和保存按钮使用）
   const manualSave = useCallback(async () => {
-    // 取消正在进行的防抖保存，避免冲突
+    if (hasConflict) {
+      Modal.confirm({
+        title: "检测到版本冲突",
+        content: "云端有新版本，继续保存将覆盖云端内容。建议先解决冲突再保存。",
+        okText: "仍然保存",
+        cancelText: "取消",
+        onOk: async () => {
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+          }
+          await doSave(title, content, summary);
+          if (!updateMutation.isError) {
+            message.success("保存成功");
+          }
+        },
+      });
+      return;
+    }
+    
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    // 立即执行保存
     await doSave(title, content, summary);
-    // 手动保存成功时显示提示
     if (!updateMutation.isError) {
       message.success("保存成功");
     }
-  }, [doSave, title, content, summary, updateMutation.isError]);
+  }, [doSave, title, content, summary, updateMutation.isError, hasConflict]);
 
   // Ctrl+S 快捷键保存
   useEffect(() => {
@@ -342,9 +359,14 @@ function EditArticlePage() {
   );
 
   const onSave = async () => {
-    // 使用 manualSave 来保存，避免和自动保存冲突
     await manualSave();
   };
+
+  const handleContentReload = useCallback(() => {
+    trpcUtils.article.getContent.invalidate({ id: Number(id) });
+    trpcUtils.article.getMeta.invalidate({ id: Number(id) });
+    contentLoadedRef.current = false;
+  }, [id, trpcUtils]);
 
   if (isLoading) {
     return <ArticleEditSkeleton />;
@@ -375,6 +397,7 @@ function EditArticlePage() {
       titleInputRef={titleInputRef}
       editorKey={editorKey}
       articleId={Number(id)}
+      onContentReload={handleContentReload}
       settingsContent={({ onClose }) => (
         <ImportWordSettings
           onImport={handleWordImport}
@@ -383,20 +406,17 @@ function EditArticlePage() {
         />
       )}
       statusIndicator={
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-[70px]">
-          {saveStatus === "saving" && (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>保存中...</span>
-            </>
-          )}
-          {saveStatus === "saved" && (
-            <>
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              <span className="text-green-500">已保存</span>
-            </>
-          )}
-        </div>
+        <SyncStatusIndicator 
+          syncStatus={
+            hasConflict ? "conflict" :
+            saveStatus === "saving" ? "syncing" :
+            saveError ? "error" :
+            saveStatus === "saved" ? "synced" :
+            conflictSyncStatus === "pending" ? "pending" :
+            "synced"
+          }
+          errorMessage={saveError}
+        />
       }
       actionButtons={
         <>
